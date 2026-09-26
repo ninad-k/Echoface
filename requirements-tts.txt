@@ -22,5 +22,5 @@ piper-tts
 # index as envs\face). Coqui Public Model License (CPML) on the XTTS v2
 # WEIGHTS is NON-COMMERCIAL — see models/MODELS.md before monetising.
 coqui-tts
-transformers==4.57.1
+transformers==5.17.0
 torchcodec
