@@ -71,15 +71,87 @@ jobs:
         with:
           python-version: "3.14"
 
-      - name: Install ffmpeg
-        uses: FedericoCarboni/setup-ffmpeg@v3
-        id: setup-ffmpeg
+      # FedericoCarboni/setup-ffmpeg@v3 (fetches a build from GitHub
+      # Releases) failed twice with "TypeError: fetch failed" -- a
+      # transient upstream/network issue outside our control (see
+      # docs/qa/defect-log.md's DEF-14). Install from each runner's own
+      # package manager instead: fewer moving parts, and apt/choco's
+      # mirrors have historically been far more reliable in Actions.
+      - name: Install ffmpeg (Ubuntu)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -e
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg; then
+              exit 0
+            fi
+            echo "::warning::apt-get ffmpeg install failed (attempt $attempt/3)"
+            sleep $((attempt * 5))
+          done
+          echo "::error::ffmpeg install via apt-get failed after 3 attempts"
+          exit 1
+
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installed = $false
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            try {
+              choco install ffmpeg -y --no-progress
+              $installed = $true
+              break
+            } catch {
+              Write-Warning "choco install ffmpeg failed (attempt $attempt/3): $_"
+              Start-Sleep -Seconds ($attempt * 5)
+            }
+          }
+          if (-not $installed) {
+            Write-Error "ffmpeg install via choco failed after 3 attempts"
+            exit 1
+          }
+          # choco's own PATH update (via refreshenv/machine env) doesn't
+          # carry over to later steps in the same job -- each step is a
+          # fresh shell process. Add the shim dir (ffmpeg.exe/ffprobe.exe
+          # shims choco always installs there) and the package's own
+          # tools\ffmpeg\bin (belt and braces, in case the shim dir is
+          # ever missing) to $GITHUB_PATH, which *does* persist.
+          Add-Content -Path $env:GITHUB_PATH -Value "C:\ProgramData\chocolatey\bin"
+          $toolsBin = Get-ChildItem -Path "C:\ProgramData\chocolatey\lib\ffmpeg*\tools\ffmpeg\bin" -Directory -ErrorAction SilentlyContinue |
+            Select-Object -First 1 -ExpandProperty FullName
+          if ($toolsBin) {
+            Add-Content -Path $env:GITHUB_PATH -Value $toolsBin
+          }
 
       - name: Install package (dev + captions extras)
         run: pip install -e ".[dev,captions]"
 
       - name: Verify ffmpeg is on PATH
-        run: ffmpeg -version
+        shell: bash
+        run: |
+          ffmpeg -version
+          ffprobe -version
+
+      - name: Check required ffmpeg filters/encoders
+        shell: bash
+        run: |
+          set -e
+          filters=$(ffmpeg -hide_banner -filters)
+          encoders=$(ffmpeg -hide_banner -encoders)
+          missing=""
+          for f in loudnorm ass sidechaincompress; do
+            echo "$filters" | grep -qw -- "$f" || missing="$missing filter:$f"
+          done
+          for e in libx264 aac; do
+            echo "$encoders" | grep -qw -- "$e" || missing="$missing encoder:$e"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::This ffmpeg build is missing required features used by echoface (compose stage / captions burn-in / music ducking):$missing"
+            exit 1
+          fi
+          echo "OK: loudnorm, ass, sidechaincompress filters and libx264, aac encoders all present."
 
       - name: Run unit + integration + e2e tests with coverage
         run: >

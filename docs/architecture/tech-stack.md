@@ -37,7 +37,11 @@ Rudrabha/Wav2Lip, OpenTalker/SadTalker, TencentARC/GFPGAN — see
 
 ## CI/CD
 GitHub Actions (`ci.yml`, `release.yml`), gitleaks, pip-audit, Dependabot,
-`FedericoCarboni/setup-ffmpeg` and `softprops/action-gh-release` actions.
+`softprops/action-gh-release`. ffmpeg is installed on CI runners via each
+OS's own package manager (`apt-get` on Ubuntu, `choco` on Windows) with a
+retry wrapper and a required-filters/encoders check, not a third-party
+Action — see `docs/qa/test-strategy.md`'s CI gate section and
+`docs/qa/defect-log.md`'s DEF-14.
 
 ## Why not X?
 

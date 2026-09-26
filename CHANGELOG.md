@@ -6,6 +6,20 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed / CI
+- **Replaced the flaky `FedericoCarboni/setup-ffmpeg@v3` Action** in
+  `ci.yml` and `release.yml` — it failed twice with `TypeError: fetch
+  failed` (PR #11's CI, and the v0.2.0 release run) — with each
+  runner's own package manager instead (`apt-get install ffmpeg` on
+  Ubuntu, `choco install ffmpeg` on Windows), each wrapped in a
+  3-attempt retry with backoff. Added an explicit `ffmpeg
+  -version`/`ffprobe -version` PATH check and a required
+  filters/encoders check (`loudnorm`, `ass`, `sidechaincompress`
+  filters; `libx264`, `aac` encoders — everything the compose stage,
+  captions burn-in, and music ducking actually use) that fails the job
+  loudly and by name if a distro/choco build is ever missing one. See
+  DEF-14 in `docs/qa/defect-log.md`.
+
 ## [0.2.0] - 2026-09-26
 
 A follow-up hardening pass working through every item in

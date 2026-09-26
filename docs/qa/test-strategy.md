@@ -44,3 +44,15 @@ and the corresponding test in `tests/`.
 both `ubuntu-latest` and `windows-latest`, Python 3.14. A release tag
 additionally re-runs the full suite before building artifacts
 (`release.yml`).
+
+ffmpeg is installed via each runner's own package manager (`apt-get
+install ffmpeg` on Ubuntu, `choco install ffmpeg` on Windows) rather than
+a third-party Action, wrapped in a 3-attempt retry with backoff, followed
+by a `ffmpeg -version`/`ffprobe -version` PATH check and a required
+filters/encoders check (`loudnorm`, `ass`, `sidechaincompress` filters;
+`libx264`, `aac` encoders — everything the compose stage, captions
+burn-in, and music ducking depend on) that fails the job loudly and by
+name if the installed build is missing any of them. See
+`docs/qa/defect-log.md`'s DEF-14 for why (the previous
+`FedericoCarboni/setup-ffmpeg` Action failed twice with a transient
+fetch error).
