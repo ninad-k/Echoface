@@ -10,6 +10,7 @@ from echoface.util.ffmpeg import (
     build_loudnorm_filter,
     build_ping_pong_plan,
     escape_filter_path,
+    fold_pingpong_index,
     parse_loudnorm_json,
 )
 
@@ -239,3 +240,35 @@ def test_build_compose_filtergraph_rejects_unknown_layout():
             loudness_lufs=-14,
             music_volume_db=-20,
         )
+
+
+def test_fold_pingpong_index_single_frame_passthrough():
+    assert fold_pingpong_index(0, 1) == 0
+    assert fold_pingpong_index(5, 1) == 5
+    assert fold_pingpong_index(5, 0) == 5
+
+
+def test_fold_pingpong_index_forward_leg_identity():
+    # N=5 -> period=8: forward leg (indices 0..4) maps to itself.
+    for i in range(5):
+        assert fold_pingpong_index(i, 5) == i
+
+
+def test_fold_pingpong_index_reverse_leg_mirrors():
+    # N=5 -> sequence: 0,1,2,3,4,3,2,1,(repeat)
+    expected = [0, 1, 2, 3, 4, 3, 2, 1]
+    for i, exp in enumerate(expected):
+        assert fold_pingpong_index(i, 5) == exp
+
+
+def test_fold_pingpong_index_wraps_across_multiple_periods():
+    # Same N=5 sequence repeating past one full period (8 frames).
+    expected = [0, 1, 2, 3, 4, 3, 2, 1]
+    for i in range(24):
+        assert fold_pingpong_index(i, 5) == expected[i % 8]
+
+
+def test_fold_pingpong_index_two_frame_clip():
+    # N=2 -> period=2: sequence 0,1,0,1,...
+    for i in range(6):
+        assert fold_pingpong_index(i, 2) == i % 2
