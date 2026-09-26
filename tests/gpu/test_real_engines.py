@@ -38,6 +38,7 @@ GFPGAN_CKPT = REPO_ROOT / "models" / "gfpgan" / "GFPGANv1.4.pth"
 CODEFORMER_CKPT = REPO_ROOT / "models" / "codeformer" / "codeformer.pth"
 PIPER_MODEL = REPO_ROOT / "models" / "piper" / "en_US-lessac-medium.onnx"
 PIPER_EXE = REPO_ROOT / "envs" / "tts" / "Scripts" / "piper.exe"
+XTTS_RUNNER = REPO_ROOT / "scripts" / "xtts_runner.py"
 
 
 def _require(*paths: Path, reason: str) -> None:
@@ -215,6 +216,40 @@ def test_real_piper_synthesis_tiny(tmp_path):
         timeout=60,
     )
     assert result.returncode == 0, result.stderr
+    assert out_path.exists()
+    info = probe(out_path)
+    assert info.has_audio
+    assert info.duration_s > 0.5
+
+
+@pytest.mark.gpu
+@pytest.mark.slow
+def test_real_xtts_synthesis_tiny(tmp_path):
+    """Real XTTS v2 synthesis (scripts/xtts_runner.py) using a built-in
+    speaker (no consent-gated reference clip needed) -- guards the
+    coqui-tts/transformers pin in requirements-tts.txt (transformers must
+    stay <5; see that file's comment for why)."""
+    _require(TTS_PYTHON, XTTS_RUNNER, reason="envs\\tts not provisioned")
+    out_path = tmp_path / "tiny_xtts.wav"
+    import subprocess
+
+    result = subprocess.run(
+        [
+            str(TTS_PYTHON),
+            str(XTTS_RUNNER),
+            "--text",
+            "This is a real XTTS test.",
+            "--out",
+            str(out_path),
+            "--device",
+            "cuda",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
     assert out_path.exists()
     info = probe(out_path)
     assert info.has_audio
