@@ -19,6 +19,23 @@ follows [Semantic Versioning](https://semver.org/).
   `test_real_xtts_synthesis_tiny` regression test added to close the
   gap of XTTS having no real-GPU test coverage before this).
 
+### Fixed
+- **Permanently fixed the stray `gfpgan/weights/` directory that
+  appeared at the repo root after every real GFPGAN restoration**
+  (`scripts/gfpgan_runner.py`, the `tests/gpu` suite, SadTalker's
+  `--enhancer gfpgan`) — root cause was `gfpgan`'s own installed
+  package hardcoding a cwd-relative `model_rootpath='gfpgan/weights'`
+  (see DEF-13 in `docs/qa/defect-log.md` for the full trace). Added
+  `echoface/util/facexlib_pin.py`, which pins facexlib's weight
+  resolution to an absolute `models/gfpgan/` instead, wired into
+  `scripts/gfpgan_runner.py` and `scripts/sadtalker_runner.py`.
+  `echoface/stages/face.py::_apply_restore` also now builds every
+  subprocess path argument absolute and passes an explicit `cwd` (the
+  job's own output dir) as defence in depth. `.gitignore` and
+  `pyproject.toml`'s mypy `exclude` both guard against a leftover
+  instance of `/gfpgan/`, `/weights/`, or `/results/` at the repo root
+  shadowing the real package again.
+
 ## [0.2.0] - 2026-09-26
 
 A follow-up hardening pass working through every item in

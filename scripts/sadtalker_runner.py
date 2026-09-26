@@ -85,6 +85,17 @@ def main() -> int:
     os.chdir(VENDOR_ROOT)
     sys.path.insert(0, str(VENDOR_ROOT))
 
+    # Must run before importing anything that can construct a GFPGANer
+    # (src.utils.face_enhancer, used when --enhancer gfpgan) or call
+    # facexlib.detection/parsing directly (src.face3d's safe keypoint
+    # extractor): both hardcode a cwd-relative weights directory that
+    # would otherwise land under vendor/SadTalker/ after the chdir()
+    # above. See echoface/util/facexlib_pin.py's module docstring
+    # (DEF-13).
+    from echoface.util.facexlib_pin import pin_facexlib_weights_dir
+
+    pin_facexlib_weights_dir()
+
     from src.facerender.animate import AnimateFromCoeff
     from src.generate_batch import get_data
     from src.generate_facerender_batch import get_facerender_data

@@ -492,17 +492,22 @@ class FaceStage(Stage):
             device = "cuda" if detect_gpu().available else "cpu"
         python_exe = resolve_exe("envs/face/Scripts/python.exe")
         region = self.cfg.face.restore_region
+        # Resolve every relative path to absolute *before* handing an
+        # explicit (non-repo-root) cwd to subprocess.run below — argv
+        # entries are otherwise resolved against that cwd, not ours.
+        video_path = video_path.resolve()
+        restored = restored.resolve()
 
         if method == "gfpgan":
             cmd = [
                 python_exe,
-                "scripts/gfpgan_runner.py",
+                resolve_exe("scripts/gfpgan_runner.py"),
                 "--input",
                 str(video_path),
                 "--outfile",
                 str(restored),
                 "--model_path",
-                "models/gfpgan/GFPGANv1.4.pth",
+                resolve_exe("models/gfpgan/GFPGANv1.4.pth"),
                 "--device",
                 device,
                 "--region",
@@ -511,7 +516,7 @@ class FaceStage(Stage):
         else:  # codeformer
             cmd = [
                 python_exe,
-                "scripts/codeformer_runner.py",
+                resolve_exe("scripts/codeformer_runner.py"),
                 "--input",
                 str(video_path),
                 "--outfile",
@@ -524,7 +529,14 @@ class FaceStage(Stage):
 
         if self.logger:
             self.logger.info(f"[face] running {method} restoration (region={region})...")
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # Explicit cwd (the job's own output dir, not the repo root) is
+        # defence in depth against any third-party code (gfpgan/facexlib,
+        # SadTalker's enhancer path) that still resolves *some* path
+        # relative to cwd despite the fixes above — see
+        # echoface/util/facexlib_pin.py and docs/qa/defect-log.md's
+        # DEF-13. Any such stray directory then lands in a per-job
+        # folder we already own and clean up, never the repo root.
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(video_path.parent))
         if result.returncode != 0:
             raise FaceEngineError(
                 f"{method} restoration failed: {(result.stdout or '') + (result.stderr or '')}"

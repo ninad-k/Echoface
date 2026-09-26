@@ -90,6 +90,17 @@ def _restore_frame(restorer, img, only_center_face: bool, region: str):
 
 def main() -> int:
     args = parse_args()
+
+    from echoface.util.facexlib_pin import pin_facexlib_weights_dir
+
+    # Must run before `from gfpgan import GFPGANer`: GFPGANer's own
+    # FaceRestoreHelper construction hardcodes a cwd-relative
+    # model_rootpath ('gfpgan/weights'), which creates a stray directory
+    # wherever this process's cwd happens to be. Pin it to an absolute
+    # path under models/gfpgan/ instead — see
+    # echoface/util/facexlib_pin.py's module docstring (DEF-13).
+    pin_facexlib_weights_dir()
+
     from gfpgan import GFPGANer
 
     restorer = GFPGANer(
