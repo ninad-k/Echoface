@@ -2,9 +2,11 @@
 
 Every entry below was actually downloaded and verified on this machine
 (RTX 5070 Laptop GPU, Python 3.14, torch 2.11+cu128) during provisioning.
-`echoface doctor` reads this file (best-effort parse) and warns if a model
-selected in `config/echoface.yaml` is marked non-commercial while
-`monetized: true`.
+`echoface doctor` warns about non-commercial models when `monetized: true`
+by reading **[`models/licenses.yaml`](licenses.yaml)** (machine-readable,
+kept consistent with the table below — see `echoface/licenses.py`), not
+this file directly; this file is the human-readable version with exact
+source URLs, versions, and SHA256 checksums.
 
 | stage    | file                                            | source (official)                                                                 | version/date        | SHA256                                                            | licence                          | commercial |
 |----------|--------------------------------------------------|-------------------------------------------------------------------------------------|----------------------|--------------------------------------------------------------------|-----------------------------------|------------|
@@ -21,6 +23,7 @@ selected in `config/echoface.yaml` is marked non-commercial while
 | face(M8) | mapping_00229-model.pth.tar                      | https://github.com/OpenTalker/SadTalker/releases/download/v0.0.2-rc                 | v0.0.2-rc             | `62a1e06006cc963220f6477438518ed86e9788226c62ae382ddc42fbcefb83f1`  | as above                           | check      |
 | captions | faster-whisper "small" (Systran/faster-whisper-small) | https://huggingface.co/Systran/faster-whisper-small (official Systran org)      | small                | (HF-cached, auto-verified by huggingface_hub)                      | MIT (code); Whisper weights MIT    | yes        |
 | voice(M8)| XTTS v2 (coqui-tts package, `tts_models/multilingual/multi-dataset/xtts_v2`) | https://huggingface.co/coqui/XTTS-v2 (official Coqui org)     | v2                    | not downloaded on this machine (import/env verified only — see README) | **Coqui Public Model License (CPML) — NON-COMMERCIAL** | **no** |
+| restore (v0.2.0) | codeformer.pth | https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth (official GitHub release) | v0.1.0 | `1009e537e0c2a07d4cabce6355f53cb66767cd4b4297ec7a4a64ca4b8a5684b7` | **S-Lab License 1.0 — NON-COMMERCIAL** | **no** |
 
 ## Notes from this machine's provisioning run
 

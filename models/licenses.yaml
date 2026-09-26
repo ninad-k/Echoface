@@ -1,0 +1,96 @@
+# Machine-readable model/licence table. This is the single source of
+# truth `echoface doctor` reads (echoface/licenses.py) to warn about
+# non-commercial models when `monetized: true`. Keep this consistent with
+# models/MODELS.md (which has the human-readable version with SHA256s,
+# exact source URLs, and download provenance) — MODELS.md links back here.
+#
+# `match`: a dict of dotted config paths -> required value. An entry is
+# "active" for the current config iff every key in `match` equals the
+# corresponding value in the loaded EchofaceConfig. Omit a `match` key
+# entirely (or set it to null) to mean "matches regardless of that field".
+#
+# `commercial`: true | false | "check" (i.e. the maintainer must verify
+# case-by-case — treated the same as false for doctor's warning purposes,
+# since "check" means "not confirmed commercial-safe").
+
+models:
+  - id: qwen2_5_ollama
+    name: "Qwen2.5 (Ollama)"
+    stage: script
+    match: { script.engine: ollama }
+    licence: "Apache-2.0 / Qwen licence"
+    commercial: true
+    source: "https://ollama.com/library/qwen2.5"
+
+  - id: piper_voice
+    name: "Piper voice model"
+    stage: voice
+    match: { voice.engine: piper }
+    licence: "MIT"
+    commercial: true
+    source: "https://huggingface.co/rhasspy/piper-voices"
+
+  - id: xtts_v2
+    name: "XTTS v2"
+    stage: voice
+    match: { voice.engine: xtts }
+    licence: "Coqui Public Model License (CPML)"
+    commercial: false
+    source: "https://huggingface.co/coqui/XTTS-v2"
+    note: "Selecting voice.engine: xtts is itself the licence opt-in (scripts/xtts_runner.py sets COQUI_TOS_AGREED)."
+
+  - id: wav2lip_gan
+    name: "Wav2Lip GAN checkpoint"
+    stage: face
+    match: { face.engine: wav2lip }
+    licence: "Research / non-commercial only"
+    commercial: false
+    source: "https://github.com/Rudrabha/Wav2Lip"
+
+  - id: s3fd_detector
+    name: "S3FD face detector (used by Wav2Lip)"
+    stage: face
+    match: { face.engine: wav2lip }
+    licence: "Research use (1adrianb/face-alignment)"
+    commercial: check
+    source: "https://www.adrianbulat.com/downloads/python-fan/s3fd-619a316812.pth"
+
+  - id: sadtalker
+    name: "SadTalker checkpoints"
+    stage: face
+    match: { face.engine: sadtalker }
+    licence: "Apache-2.0 (code); sub-model checkpoints (3DMM/BFM, face-vid2vid) carry their own terms, not individually confirmed"
+    commercial: check
+    source: "https://github.com/OpenTalker/SadTalker"
+
+  - id: gfpgan
+    name: "GFPGAN v1.4"
+    stage: face
+    match: { face.restore: gfpgan }
+    licence: "Apache-2.0 (code); weights distributed for research/non-commercial use per GFPGAN's own licence file"
+    commercial: check
+    source: "https://github.com/TencentARC/GFPGAN"
+
+  - id: facexlib_weights
+    name: "facexlib detection/parsing weights (GFPGAN + SadTalker enhancer dependency)"
+    stage: face
+    match: { face.restore: gfpgan }
+    licence: "Apache-2.0"
+    commercial: true
+    source: "https://github.com/xinntao/facexlib"
+
+  - id: codeformer
+    name: "CodeFormer"
+    stage: face
+    match: { face.restore: codeformer }
+    licence: "S-Lab License 1.0 (non-commercial)"
+    commercial: false
+    source: "https://github.com/sczhou/CodeFormer"
+
+  - id: faster_whisper
+    name: "faster-whisper / Whisper weights"
+    stage: captions
+    match: { captions.engine: whisper }
+    licence: "MIT (code); Whisper weights MIT"
+    commercial: true
+    source: "https://huggingface.co/Systran"

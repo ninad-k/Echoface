@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from echoface.config import EchofaceConfig
+from echoface.licenses import load_licenses, non_commercial_active_models
 from echoface.util.ffmpeg import ffmpeg_available, ffmpeg_exe
 from echoface.util.gpu import detect_gpu, ollama_models, ollama_reachable
 
@@ -147,19 +148,44 @@ def _check_presenters(cfg: EchofaceConfig) -> list[Check]:
     return checks
 
 
-def _check_monetization_licence(cfg: EchofaceConfig) -> Check | None:
+def _check_monetization_licence(cfg: EchofaceConfig) -> list[Check]:
+    """Cross-reference every *active* model for the current config
+    (script/voice/face/restore/captions engines) against
+    models/licenses.yaml, not just a single hardcoded Wav2Lip case — see
+    docs/security/license-matrix.md and ADR (licence-matrix overhaul,
+    v0.2.0)."""
     if not cfg.monetized:
-        return None
-    non_commercial_engines = {"wav2lip": "Wav2Lip (wav2lip_gan.pth) is research/non-commercial licensed"}
-    if cfg.face.engine in non_commercial_engines:
-        return Check(
-            "monetization licence check",
-            False,
-            f"monetized=true but face.engine={cfg.face.engine!r}: {non_commercial_engines[cfg.face.engine]}. "
-            "See models/MODELS.md and confirm commercial terms before monetising.",
-            level="warning",
+        return []
+    licenses = load_licenses()
+    if not licenses:
+        return [
+            Check(
+                "monetization licence check",
+                False,
+                "monetized=true but models/licenses.yaml is missing or unreadable; "
+                "cannot verify licence compatibility. See models/MODELS.md manually.",
+                level="warning",
+            )
+        ]
+    flagged = non_commercial_active_models(cfg.model_dump(), licenses)
+    if not flagged:
+        return [Check("monetization licence check", True, "no known non-commercial models selected")]
+    checks = []
+    for model in flagged:
+        detail = (
+            f"{model.licence} ({model.status_label}). See models/MODELS.md / docs/security/license-matrix.md."
         )
-    return Check("monetization licence check", True, "no known non-commercial models selected")
+        if model.note:
+            detail += f" Note: {model.note}"
+        checks.append(
+            Check(
+                f"monetization licence: {model.name}",
+                False,
+                f"monetized=true but active model {model.id!r} ({model.stage} stage) is {detail}",
+                level="warning",
+            )
+        )
+    return checks
 
 
 def run_doctor(cfg: EchofaceConfig) -> list[Check]:
@@ -173,7 +199,5 @@ def run_doctor(cfg: EchofaceConfig) -> list[Check]:
     checks.append(_check_torch_cuda(Path("envs/face")))
     checks.extend(_check_model_files(cfg))
     checks.extend(_check_presenters(cfg))
-    mon_check = _check_monetization_licence(cfg)
-    if mon_check:
-        checks.append(mon_check)
+    checks.extend(_check_monetization_licence(cfg))
     return checks
