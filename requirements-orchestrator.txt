@@ -1,0 +1,10 @@
+# Orchestrator venv (.venv) — lightweight, no torch, no heavy ML.
+# Install with: pip install -e .[dev,captions]  (captions extra pulls faster-whisper, CPU int8 build)
+typer>=0.12
+rich>=13.7
+pydantic>=2.5
+PyYAML>=6.0
+requests>=2.31
+pytest>=7.4
+pytest-cov>=4.1
+faster-whisper>=1.0

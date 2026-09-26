@@ -1,0 +1,7 @@
+TEST FIXTURE — not a real consent document.
+
+This file exists only so the automated test suite's "smoketest" presenter
+(assets/portraits/smoketest/) passes the consent-file-exists check in
+echoface/job.py::check_presenter_consent. It intentionally has no real
+signature and represents no real person. Do not use it as a template for
+an actual consent document — see consent/README.md for that.

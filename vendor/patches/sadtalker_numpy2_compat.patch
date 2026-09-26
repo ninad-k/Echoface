@@ -1,0 +1,77 @@
+NumPy 2.x compatibility fixes applied to the vendored OpenTalker/SadTalker
+checkout, applied idempotently by scripts/setup_windows.ps1 after cloning.
+
+Status: COMPLETE. With these three patches, `--still --preprocess crop
+--size 256 --batch_size 1` (the spec's 4 GB-safe settings) runs end to end
+on this machine (Python 3.14, torch 2.11+cu128, numpy 2.5), including the
+`--enhancer gfpgan` path. See README's "Real end-to-end verification"
+section for timings and ffprobe/frame evidence. All three are the same
+root cause: NumPy 1.x silently coerced a single-element array to a Python
+scalar in `float(x)` / `np.array([...])` contexts; NumPy 2.x now raises
+instead. None are Python-3.14-specific — they'd hit any numpy>=1.25-ish
+environment.
+
+Every other vendored code path SadTalker's inference actually exercises
+(kornia ops in src/facerender, scipy/skimage calls in the 3DMM/crop utils,
+imageio, GFPGAN's own facexlib detection/parsing) ran clean with no
+further patching needed.
+
+--- a/src/face3d/util/preprocess.py
++++ b/src/face3d/util/preprocess.py
+@@ -9,7 +9,7 @@
+ from skimage import transform as trans
+ import torch
+ import warnings
+-warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
++warnings.filterwarnings("ignore", category=DeprecationWarning)
+ warnings.filterwarnings("ignore", category=FutureWarning)
+ # ^ np.VisibleDeprecationWarning was removed in NumPy 1.25+.
+
+@@ -40,9 +40,9 @@
+ def resize_n_crop_img(img, lm, t, s, target_size=224., mask=None):
+     w0, h0 = img.size
+     w = (w0*s).astype(np.int32)
+     h = (h0*s).astype(np.int32)
+-    left = (w/2 - target_size/2 + float((t[0] - w0/2)*s)).astype(np.int32)
++    left = (w/2 - target_size/2 + np.asarray((t[0] - w0/2)*s).item()).astype(np.int32)
+     right = left + target_size
+-    up = (h/2 - target_size/2 + float((h0/2 - t[1])*s)).astype(np.int32)
++    up = (h/2 - target_size/2 + np.asarray((h0/2 - t[1])*s).item()).astype(np.int32)
+     below = up + target_size
+ # t[0]/t[1] are shape-(1,) arrays (from POS()'s np.stack); NumPy 2.x no
+ # longer allows float() on anything but a 0-d array. .item() extracts the
+ # scalar explicitly regardless of NumPy version.
+
+@@ -98,7 +98,7 @@
+     img_new, lm_new, mask_new = resize_n_crop_img(img, lm, t, s, target_size=target_size, mask=mask)
+-    trans_params = np.array([w0, h0, s, t[0], t[1]])
++    trans_params = np.array([w0, h0, s, np.asarray(t[0]).item(), np.asarray(t[1]).item()])
+ # Same root cause: mixing python scalars (w0, h0, s) with shape-(1,) arrays
+ # (t[0], t[1]) used to build an object-dtype array implicitly; NumPy 2.x
+ # raises "setting an array element with a sequence" instead. Extracting
+ # the scalar with .item() first keeps this a clean float64 array.
+
+--- a/src/face3d/util/my_awing_arch.py
++++ b/src/face3d/util/my_awing_arch.py
+@@ -15,7 +15,7 @@
+ def calculate_points(heatmaps):
+     # change heatmaps to landmarks
+     B, N, H, W = heatmaps.shape
+-    preds = preds.astype(np.float, copy=False)
++    preds = preds.astype(np.float64, copy=False)
+     return preds
+ # np.float was a deprecated alias for the builtin float, removed in
+ # NumPy 1.24+. This is in the AWing landmark-heatmap decode path, hit by
+ # every real face-detection call (not just an edge case).
+
+--- a/src/utils/preprocess.py
++++ b/src/utils/preprocess.py
+@@ -145,7 +145,7 @@
+                 trans_params, im1, lm1, _ = align_img(frame, lm1, self.lm3d_std)
+                 if 'crop' in crop_or_resize.lower():
+-                    trans_params = np.array([float(item) for item in np.hsplit(trans_params, 5)]).astype(np.float32)
++                    trans_params = np.array([np.asarray(item).item() for item in np.hsplit(trans_params, 5)]).astype(np.float32)
+ # np.hsplit(trans_params, 5) on a shape-(5,) array yields five shape-(1,)
+ # arrays; float(shape-(1,)-array) is exactly the same NumPy 2.x break as
+ # above. This is CropAndExtract.generate()'s per-frame path, hit on every
+ # source image/frame processed.

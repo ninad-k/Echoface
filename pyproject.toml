@@ -1,0 +1,108 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "echoface"
+version = "0.1.0"
+description = "Local, offline AI avatar video pipeline: script -> voice -> lip-synced face -> captioned 9:16 short."
+readme = "README.md"
+requires-python = ">=3.14"
+license = { text = "MIT" }
+authors = [{ name = "Ninad" }]
+keywords = ["ai-avatar", "talking-head", "wav2lip", "sadtalker", "piper-tts", "ffmpeg", "local-first"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Multimedia :: Video",
+]
+
+dependencies = [
+  "typer>=0.12",
+  "rich>=13.7",
+  "pydantic>=2.5",
+  "PyYAML>=6.0",
+  "requests>=2.31",
+  "python-dotenv>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ninad-k/Echoface"
+Documentation = "https://github.com/ninad-k/Echoface/tree/main/docs"
+Issues = "https://github.com/ninad-k/Echoface/issues"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4",
+  "pytest-cov>=4.1",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "types-PyYAML",
+  "types-requests",
+]
+captions = [
+  "faster-whisper>=1.0",
+]
+all = [
+  "echoface[dev,captions]",
+]
+
+[project.scripts]
+echoface = "echoface.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["echoface", "echoface.*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "gpu: requires a CUDA GPU and the envs\\face venv (skipped by default)",
+  "ollama: requires a reachable Ollama server with a model pulled (skipped by default)",
+  "slow: slower tests not needed for a quick local run",
+]
+addopts = "-m 'not gpu and not ollama'"
+
+[tool.coverage.run]
+source = ["echoface"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py313"  # ruff's parser doesn't yet target py314; syntax is compatible
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4"]
+ignore = [
+  "E501",   # line length handled by the formatter, not the linter
+  "B008",   # typer.Option(...)/typer.Argument(...) as a default IS the Typer API
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["echoface"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["SIM300"]  # `"literal" == actual` reads fine in assertions
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+warn_unused_ignores = true
+no_implicit_optional = true
+# Heavy-model stages import optional/lazy deps (faster_whisper, cv2, torch)
+# that aren't installed in the orchestrator's type-checking environment;
+# keep mypy scoped to what's meaningfully checkable without them.
+exclude = ["vendor/", "scripts/wav2lip_runner.py", "scripts/gfpgan_runner.py", "scripts/sadtalker_runner.py", "scripts/xtts_runner.py"]

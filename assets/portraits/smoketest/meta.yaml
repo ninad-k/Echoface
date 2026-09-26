@@ -1,0 +1,7 @@
+# Presenter used only by the pytest end-to-end smoke test
+# (tests/test_smoke_e2e.py). Not a real person; consent_ref points at a
+# clearly-labelled test fixture, not a real consent document.
+display_name: Smoke Test Presenter
+consent_ref: tests/fixtures/consent_smoketest.txt
+consent_date: 2026-09-26
+voice_consent: false

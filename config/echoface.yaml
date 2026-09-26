@@ -1,0 +1,62 @@
+presenter: anchor1
+language: en
+target_seconds: 35
+monetized: false
+
+script:
+  engine: ollama          # ollama | file
+  model: qwen2.5:7b
+  template: prompts/short_default.md
+  temperature: 0.7
+  host: http://localhost:11434
+  max_retries: 3
+
+voice:
+  engine: piper           # piper | xtts | dummy
+  piper_exe: envs/tts/Scripts/piper.exe
+  piper_model: models/piper/en_US-lessac-medium.onnx
+  speed: 1.05
+  pause_ms: 350
+  xtts_speaker_wav: null  # only with written voice consent
+
+face:
+  engine: wav2lip         # wav2lip | sadtalker | dummy
+  source: idle            # idle (video loop) | photo
+  restore: gfpgan         # none | gfpgan | codeformer
+  # batch_size/face_det_batch_size are sized for an 8 GB GPU (verified on
+  # an RTX 5070 Laptop: wav2lip_batch_size=32 has headroom to spare). On a
+  # 4 GB card, halve both — run_with_oom_retry also auto-halves
+  # wav2lip_batch_size on a real CUDA OOM and falls back to CPU as a last
+  # resort, so these are a starting point, not a hard limit.
+  batch_size: 32
+  face_det_batch_size: 8
+  device: auto            # auto | cuda | cpu
+  resize_factor: 1
+  pads: [0, 15, 0, 0]
+  chunk_seconds: 40
+
+captions:
+  engine: whisper         # whisper | dummy
+  model: small
+  device: cpu
+  compute_type: int8
+  style: bold_center      # words highlighted as spoken
+  max_words_per_line: 3
+  font: Arial
+  font_size: 96
+
+compose:
+  width: 1080
+  height: 1920
+  fps: 30
+  layout: face_top        # face_top | full_face | face_bottom
+  background: null        # path to image/video, or null for generated colour fallback
+  background_color: "0x101018"
+  music: null
+  music_volume_db: -20
+  duck_under_voice: true
+  loudness_lufs: -14       # target integrated loudness (two-pass loudnorm)
+  true_peak_dbtp: -2.5     # pre-encode TP ceiling (margin for AAC overshoot; final <= -1 dBTP)
+  loudness_lra: 11
+  crf: 19
+  disclosure_line: "Presenter is AI-generated."

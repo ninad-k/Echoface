@@ -1,0 +1,14 @@
+Consent note for the "realtest" presenter used in Echoface's real-engine
+end-to-end verification.
+
+The portrait (assets/portraits/realtest/portrait.png) is a public-domain
+19th-century oil painting (a classical female portrait bust, in the style
+of Bouguereau), bundled as a demo/example asset in the official
+OpenTalker/SadTalker GitHub repository
+(vendor/SadTalker/examples/source_image/art_10.png) for exactly this kind
+of inference smoke-testing. It is not a photograph of a real, living,
+identifiable person, so there is no real individual whose consent is
+required. This note exists only so the "realtest" presenter's meta.yaml
+consent_ref points at a file that exists, satisfying Echoface's consent
+gate (echoface/job.py::check_presenter_consent) for pipeline testing
+purposes.

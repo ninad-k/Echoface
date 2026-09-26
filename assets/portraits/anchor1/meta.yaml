@@ -1,0 +1,9 @@
+# Sample presenter metadata. This is a PLACEHOLDER presenter shipped with the
+# repo for smoke-testing the pipeline shape (face stage, layout, compose).
+# It intentionally references a consent document that does NOT exist, so
+# that `echoface doctor` and the consent check correctly refuse to render
+# with this presenter until a real signed consent file is added.
+display_name: Anchor 1 (sample / placeholder)
+consent_ref: consent/anchor1_2026-09.pdf
+consent_date: 2026-09-26
+voice_consent: false

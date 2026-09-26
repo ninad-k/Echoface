@@ -1,0 +1,26 @@
+# envs\tts venv — Piper (default) and/or XTTS v2 (Coqui, optional).
+# Python 3.14.
+#
+# piper-tts (pip package) installs BOTH `piper.exe` (console script) and a
+# `python -m piper` module entry point. Its CLI differs from the old
+# rhasspy C++ piper.exe release: flags are -m/-c/-f and --length-scale
+# (hyphen), config auto-detects next to the model if -c is omitted.
+piper-tts
+
+# XTTS v2 — optional, M8 upgrade path. The original coqui-ai/TTS PyPI
+# package is unmaintained (archived, no Python 3.14 wheels); use the
+# actively-maintained "coqui-tts" fork (idiap/coqui-ai-TTS) instead, which
+# installs and imports cleanly on Python 3.14 + torch 2.11+cu128 once two
+# things are pinned/added (verified on this machine):
+#   - transformers must be pinned <5 (coqui-tts 0.27.5's tortoise/XTTS
+#     layers import `isin_mps_friendly` from transformers.pytorch_utils,
+#     which transformers 5.x removed; coqui-tts's own constraint is just
+#     ">=4.57" so an unpinned install grabs a too-new 5.x and breaks).
+#   - torchcodec is required for audio IO from torch>=2.9 (torch 2.11 here)
+#     and is not a hard pip dependency of coqui-tts yet.
+# ~3-4 GB VRAM for inference; also needs torch/torchaudio (same cu128
+# index as envs\face). Coqui Public Model License (CPML) on the XTTS v2
+# WEIGHTS is NON-COMMERCIAL — see models/MODELS.md before monetising.
+coqui-tts
+transformers==4.57.1
+torchcodec

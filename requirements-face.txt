@@ -1,0 +1,29 @@
+# envs\face venv — Wav2Lip / SadTalker / GFPGAN. Python 3.14 (see README for
+# why: verified working with prebuilt wheels for every dependency below on
+# this machine's RTX 5070 Laptop GPU / cu128 torch build).
+#
+# Install torch FIRST, matching your CUDA driver (Blackwell/RTX 50-series
+# needs cu128 or newer; cu121/cu124 do NOT support sm_120):
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+#
+# basicsr (a GFPGAN dependency) is NOT listed here — its PyPI sdist fails to
+# build on Python 3.13+ / modern torchvision and needs a 2-line patch first.
+# scripts/setup_windows.ps1 downloads, patches (vendor/patches/patch_basicsr.py)
+# and installs it automatically. gfpgan itself installs with --no-deps after
+# that so it doesn't try to pull the unpatched basicsr from PyPI.
+opencv-python
+librosa
+resampy
+scipy
+tqdm
+imageio
+imageio-ffmpeg
+face-alignment
+facexlib
+kornia
+yacs
+pydub
+safetensors
+gdown
+audioop-lts  # stdlib `audioop` was removed in Python 3.13+; SadTalker's
+             # pydub dependency needs this backport instead.
