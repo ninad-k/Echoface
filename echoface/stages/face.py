@@ -492,22 +492,30 @@ class FaceStage(Stage):
             device = "cuda" if detect_gpu().available else "cpu"
         python_exe = resolve_exe("envs/face/Scripts/python.exe")
         region = self.cfg.face.restore_region
-        # Resolve every relative path to absolute *before* handing an
-        # explicit (non-repo-root) cwd to subprocess.run below — argv
-        # entries are otherwise resolved against that cwd, not ours.
+
+        def _abs(rel: str) -> str:
+            """Absolute path relative to the current cwd, unconditionally
+            (unlike resolve_exe, which only resolves a path that already
+            exists — model weights may not have been downloaded yet in
+            every environment, e.g. CI). Must be called before the
+            explicit cwd is handed to subprocess.run below, since these
+            argv entries would otherwise resolve against that cwd, not
+            ours."""
+            return str((Path.cwd() / rel).resolve())
+
         video_path = video_path.resolve()
         restored = restored.resolve()
 
         if method == "gfpgan":
             cmd = [
                 python_exe,
-                resolve_exe("scripts/gfpgan_runner.py"),
+                _abs("scripts/gfpgan_runner.py"),
                 "--input",
                 str(video_path),
                 "--outfile",
                 str(restored),
                 "--model_path",
-                resolve_exe("models/gfpgan/GFPGANv1.4.pth"),
+                _abs("models/gfpgan/GFPGANv1.4.pth"),
                 "--device",
                 device,
                 "--region",
@@ -516,7 +524,7 @@ class FaceStage(Stage):
         else:  # codeformer
             cmd = [
                 python_exe,
-                resolve_exe("scripts/codeformer_runner.py"),
+                _abs("scripts/codeformer_runner.py"),
                 "--input",
                 str(video_path),
                 "--outfile",
