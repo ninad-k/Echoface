@@ -6,6 +6,14 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 10
     labels: ["dependencies"]
+    ignore:
+      # coqui-tts 0.27.5's tortoise/XTTS layers import
+      # `isin_mps_friendly` from transformers.pytorch_utils, which
+      # transformers 5.x removed — see requirements-tts.txt for the
+      # full pin rationale. Re-evaluate once coqui-tts supports
+      # transformers>=5.
+      - dependency-name: "transformers"
+        versions: [">=5"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
