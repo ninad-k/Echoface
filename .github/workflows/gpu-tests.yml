@@ -1,0 +1,54 @@
+name: GPU / real-engine tests
+
+# Manual-only (workflow_dispatch), and only runs on a self-hosted runner
+# with the `gpu` label — see the "Registering a self-hosted GPU runner"
+# note below. This workflow NEVER triggers on push/PR and can never block
+# normal CI (ci.yml), since no such runner exists by default: GitHub
+# simply leaves a workflow_dispatch-only, self-hosted job queued/unpicked
+# if no matching runner is registered, and it doesn't gate any other
+# workflow or branch protection rule.
+
+on:
+  workflow_dispatch:
+    inputs:
+      marker_expr:
+        description: "pytest -m expression"
+        required: false
+        default: "gpu or ollama"
+
+jobs:
+  gpu-tests:
+    name: Real-engine tests (self-hosted GPU)
+    runs-on: [self-hosted, gpu]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install orchestrator package
+        run: |
+          if (-not (Test-Path ".venv\Scripts\pytest.exe")) {
+            py -3.14 -m venv .venv
+          }
+          .venv\Scripts\pip install -e ".[dev,captions]"
+        shell: pwsh
+
+      - name: Run GPU/Ollama-marked tests
+        run: .venv\Scripts\pytest -v -m "${{ github.event.inputs.marker_expr }}" tests\gpu --no-header
+        shell: pwsh
+
+# --- Registering a self-hosted GPU runner (do this yourself; not done by
+#     this repo or by any automated tooling) ------------------------------
+# 1. On the Windows machine with the GPU and envs\face/envs\tts already
+#    provisioned (scripts\setup_windows.ps1) and model weights downloaded
+#    (models\MODELS.md), go to:
+#      https://github.com/ninad-k/Echoface/settings/actions/runners/new
+# 2. Follow GitHub's generated "Download" and "Configure" commands for
+#    Windows. When prompted for labels, add `gpu` (in addition to the
+#    default `self-hosted`, `Windows`, `X64` labels) — this workflow's
+#    `runs-on: [self-hosted, gpu]` only matches a runner with that label.
+# 3. Run the runner as a service (the setup script offers this) so it's
+#    available without a logged-in session, or run it interactively for
+#    on-demand use only.
+# 4. Trigger a run manually: Actions tab -> "GPU / real-engine tests" ->
+#    "Run workflow". It will never run automatically on push/PR.
+# 5. To remove the runner later, use the same settings page's "Remove"
+#    button (or `./config.cmd remove` on the runner machine).
