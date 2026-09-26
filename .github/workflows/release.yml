@@ -21,7 +21,43 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
-      - uses: FedericoCarboni/setup-ffmpeg@v3
+      # Same install method as ci.yml's test job -- see that file's
+      # comment (and docs/qa/defect-log.md's DEF-14) for why this
+      # replaced FedericoCarboni/setup-ffmpeg@v3.
+      - name: Install ffmpeg
+        shell: bash
+        run: |
+          set -e
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg; then
+              exit 0
+            fi
+            echo "::warning::apt-get ffmpeg install failed (attempt $attempt/3)"
+            sleep $((attempt * 5))
+          done
+          echo "::error::ffmpeg install via apt-get failed after 3 attempts"
+          exit 1
+      - name: Verify ffmpeg is on PATH
+        run: |
+          ffmpeg -version
+          ffprobe -version
+      - name: Check required ffmpeg filters/encoders
+        run: |
+          set -e
+          filters=$(ffmpeg -hide_banner -filters)
+          encoders=$(ffmpeg -hide_banner -encoders)
+          missing=""
+          for f in loudnorm ass sidechaincompress; do
+            echo "$filters" | grep -qw -- "$f" || missing="$missing filter:$f"
+          done
+          for e in libx264 aac; do
+            echo "$encoders" | grep -qw -- "$e" || missing="$missing encoder:$e"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::This ffmpeg build is missing required features used by echoface (compose stage / captions burn-in / music ducking):$missing"
+            exit 1
+          fi
+          echo "OK: loudnorm, ass, sidechaincompress filters and libx264, aac encoders all present."
       - run: pip install -e ".[dev,captions]"
       - run: pytest tests/unit tests/integration tests/e2e
 
