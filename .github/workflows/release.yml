@@ -1,0 +1,84 @@
+name: Release
+
+# Builds sdist + wheel and publishes a GitHub Release with those artifacts
+# whenever a `v*` tag is pushed. Does NOT publish to PyPI — see the note
+# at the bottom of this file for how to enable that later.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Test before release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: FedericoCarboni/setup-ffmpeg@v3
+      - run: pip install -e ".[dev,captions]"
+      - run: pytest tests/unit tests/integration tests/e2e
+
+  build:
+    name: Build sdist + wheel
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: pip install build
+      - run: python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Generate changelog notes for this tag
+        id: notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          {
+            echo "notes<<EOF"
+            awk "/^## \[${VERSION}\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md || true
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body: ${{ steps.notes.outputs.notes }}
+          generate_release_notes: true
+
+# --- Enabling PyPI publishing later -----------------------------------
+# This workflow intentionally does NOT upload to PyPI and defines no
+# PyPI-related secrets. When the project is ready to publish there, the
+# recommended approach is "trusted publishing" (OIDC, no long-lived API
+# token to leak):
+#   1. On pypi.org, register the project and add a trusted publisher
+#      pointing at this repo + this workflow file + the `release`
+#      environment.
+#   2. Add a `pypi` job here with `environment: pypi`,
+#      `permissions: {id-token: write}`, and a
+#      `pypa/gh-action-pypi-publish@release/v1` step — no `password`/
+#      `api-token` input needed with trusted publishing.
+#   3. Gate it behind the `test` and `build` jobs, same as `release` above.

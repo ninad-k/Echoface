@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (ruff, mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install package (dev extras)
+        run: pip install -e ".[dev,captions]"
+      - name: ruff check
+        run: ruff check echoface scripts tests
+      - name: ruff format --check
+        run: ruff format --check echoface scripts tests
+      - name: mypy
+        run: mypy echoface
+
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-audit:
+    name: Dependency vulnerability audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install package
+        run: pip install -e ".[dev,captions]"
+      - name: pip-audit
+        run: pip install pip-audit && pip-audit --skip-editable || true
+        # `|| true`: report findings without failing the build on every new
+        # advisory the moment it's published — treat this as a visibility
+        # signal (read the job log / artifact), not a hard release gate,
+        # since Echoface has no network-facing attack surface (see
+        # docs/security/threat-model.md).
+
+  test:
+    name: Test (${{ matrix.os }}, py3.14)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install ffmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        id: setup-ffmpeg
+
+      - name: Install package (dev + captions extras)
+        run: pip install -e ".[dev,captions]"
+
+      - name: Verify ffmpeg is on PATH
+        run: ffmpeg -version
+
+      - name: Run unit + integration + e2e tests with coverage
+        run: >
+          pytest -v
+          --cov=echoface --cov-report=term-missing --cov-report=xml
+          tests/unit tests/integration tests/e2e
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}
+          path: coverage.xml
+          retention-days: 14
+
+  ci-summary:
+    name: CI summary
+    if: always()
+    needs: [lint, gitleaks, dependency-audit, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required jobs
+        run: |
+          echo "lint: ${{ needs.lint.result }}"
+          echo "gitleaks: ${{ needs.gitleaks.result }}"
+          echo "dependency-audit: ${{ needs.dependency-audit.result }}"
+          echo "test: ${{ needs.test.result }}"
+          if [ "${{ needs.lint.result }}" != "success" ] || \
+             [ "${{ needs.gitleaks.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ]; then
+            echo "One or more required jobs failed."
+            exit 1
+          fi
