@@ -1,0 +1,7 @@
+# Real-engine end-to-end test presenter. Portrait is a public-domain
+# painting (not a real person) bundled with the SadTalker repo's examples
+# — see consent/realtest_2026-09.txt for details.
+display_name: Real Engine Test Presenter
+consent_ref: consent/realtest_2026-09.txt
+consent_date: 2026-09-26
+voice_consent: false

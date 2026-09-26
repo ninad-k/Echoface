@@ -216,3 +216,41 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Echoface project-specific
+.venv/
+envs/
+vendor/*
+!vendor/patches/
+models/*
+!models/MODELS.md
+output/
+.idea/
+
+# Model weights / checkpoints (never committed regardless of location)
+*.onnx
+*.onnx.json
+*.pth
+*.pt
+*.bin
+*.safetensors
+*.ckpt
+*.tar
+run.log
+
+# Secrets / environment
+.env
+.env.*
+!.env.example
+
+# Generated, machine-specific cache (regenerated on next render)
+**/facecache.json
+
+# SadTalker example portrait: licence for redistribution is not clearly
+# granted (see assets/ATTRIBUTION.md) — setup copies it from vendor/ instead.
+assets/portraits/realtest/portrait.png
+
+# gitleaks binary if downloaded locally for a scan (never commit the tool itself)
+gitleaks.exe
+gitleaks_*.zip
+
