@@ -5,7 +5,7 @@
 | Level | Location | What it covers | Runs in CI? |
 |---|---|---|---|
 | Unit | `tests/unit/` | Pure functions and small classes: config hashing, text normalisation, script JSON validation, caption alignment/grouping, ffmpeg filtergraph/loudnorm string building, OOM-retry logic (subprocess mocked), consent checks, `doctor`'s timeout/report logic | Yes |
-| Integration | `tests/integration/` | Config override precedence (env > CLI > yaml > default), CLI commands against the real `Job`/`job.json` machinery, the compose stage's real ffmpeg pipeline against synthetic media | Yes |
+| Integration | `tests/integration/` | Config override precedence (CLI > env > yaml > default, see ADR-0008), CLI commands against the real `Job`/`job.json` machinery, the compose stage's real ffmpeg pipeline against synthetic media | Yes |
 | End-to-end | `tests/e2e/` | Full `make`→`clean`→`resume` flow through the real CLI with `dummy` engines and the real ffmpeg compose stage | Yes (ffmpeg installed in CI) |
 | Real-engine (manual) | Documented in `docs/qa/test-plan.md` | Real Wav2Lip/SadTalker/GFPGAN/Piper/XTTS/faster-whisper on GPU hardware | No — no GPU on hosted runners (see ADR-0007) |
 

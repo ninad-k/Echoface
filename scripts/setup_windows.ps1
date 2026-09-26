@@ -11,10 +11,10 @@
   -Force is passed for that step.
 
   Does NOT download model checkpoints or clone vendor repos other than what
-  is listed below under "vendor repos" — those are cloned here because our
+  is listed below under "vendor repos" - those are cloned here because our
   own runner scripts (scripts\wav2lip_runner.py, scripts\gfpgan_runner.py)
   import their (patched) architecture/detector code directly. Model WEIGHTS
-  are a separate, explicit step (large, individually licensed) — see
+  are a separate, explicit step (large, individually licensed) - see
   models\MODELS.md for exact source URLs/checksums/licences already
   recorded from this machine's provisioning run.
 #>
@@ -47,7 +47,7 @@ function New-Venv([string]$Path) {
 }
 
 # ---------------------------------------------------------------------
-# 1. Orchestrator venv (.venv) — Python 3.14, no torch.
+# 1. Orchestrator venv (.venv) - Python 3.14, no torch.
 # ---------------------------------------------------------------------
 New-Venv ".venv"
 Write-Host "Installing orchestrator package (editable) + dev/captions extras..." -ForegroundColor Green
@@ -55,7 +55,7 @@ Write-Host "Installing orchestrator package (editable) + dev/captions extras..."
 & ".venv\Scripts\pip.exe" install -e ".[dev,captions]"
 
 # ---------------------------------------------------------------------
-# 2. Vendor repos (Wav2Lip / SadTalker / GFPGAN) — cloned so our runner
+# 2. Vendor repos (Wav2Lip / SadTalker / GFPGAN) - cloned so our runner
 #    scripts can import their (patched) model/detector code directly.
 # ---------------------------------------------------------------------
 if (-not $SkipVendorClone) {
@@ -64,6 +64,7 @@ if (-not $SkipVendorClone) {
         "Wav2Lip"  = "https://github.com/Rudrabha/Wav2Lip.git"
         "SadTalker" = "https://github.com/OpenTalker/SadTalker.git"
         "GFPGAN"   = "https://github.com/TencentARC/GFPGAN.git"
+        "CodeFormer" = "https://github.com/sczhou/CodeFormer.git"
     }
     foreach ($name in $repos.Keys) {
         $dest = "vendor\$name"
@@ -96,15 +97,39 @@ if (-not $SkipVendorClone) {
 
     # SadTalker needs three small NumPy-2.x compatibility fixes to run at
     # all (float(ndarray)/ragged-array patterns NumPy 1.x silently
-    # coerced). Idempotent — see vendor\patches\sadtalker_numpy2_compat.patch
+    # coerced). Idempotent - see vendor\patches\sadtalker_numpy2_compat.patch
     # for the full diff/rationale.
     if (Test-Path "vendor\SadTalker") {
         Write-Host "Patching vendor\SadTalker for NumPy 2.x compatibility..." -ForegroundColor Green
         & ".venv\Scripts\python.exe" "vendor\patches\patch_sadtalker.py" "vendor\SadTalker"
     }
 
+    # CodeFormer bundles its own local basicsr/facelib copies (not pip
+    # installed) but never generates basicsr/version.py outside a real
+    # `pip install`. See vendor\patches\patch_codeformer.py.
+    if (Test-Path "vendor\CodeFormer") {
+        Write-Host "Patching vendor\CodeFormer (basicsr/version.py)..." -ForegroundColor Green
+        & ".venv\Scripts\python.exe" "vendor\patches\patch_codeformer.py" "vendor\CodeFormer"
+    }
+
+    # CodeFormer's own facelib detector/parser weights are the same files
+    # GFPGAN's facexlib already needs (models\gfpgan\*.pth) - reuse them
+    # instead of a second download, once both are present.
+    $cfFacelib = "vendor\CodeFormer\weights\facelib"
+    if ((Test-Path "models\gfpgan\detection_Resnet50_Final.pth") -and (-not (Test-Path "$cfFacelib\detection_Resnet50_Final.pth"))) {
+        New-Item -ItemType Directory -Force -Path $cfFacelib | Out-Null
+        Copy-Item "models\gfpgan\detection_Resnet50_Final.pth" "$cfFacelib\detection_Resnet50_Final.pth"
+        Copy-Item "models\gfpgan\parsing_parsenet.pth" "$cfFacelib\parsing_parsenet.pth"
+        Write-Host "Copied shared facelib weights into vendor\CodeFormer\weights\facelib" -ForegroundColor Green
+    }
+    $cfWeights = "vendor\CodeFormer\weights\CodeFormer"
+    if ((Test-Path "models\codeformer\codeformer.pth") -and (-not (Test-Path "$cfWeights\codeformer.pth"))) {
+        New-Item -ItemType Directory -Force -Path $cfWeights | Out-Null
+        Copy-Item "models\codeformer\codeformer.pth" "$cfWeights\codeformer.pth"
+    }
+
     # The "realtest" sample presenter's portrait is SadTalker's own demo
-    # asset — not committed to this repo (see assets\ATTRIBUTION.md for
+    # asset - not committed to this repo (see assets\ATTRIBUTION.md for
     # why), copied locally here instead.
     $realtestSrc = "vendor\SadTalker\examples\source_image\art_10.png"
     $realtestDst = "assets\portraits\realtest\portrait.png"
@@ -118,7 +143,7 @@ if (-not $SkipVendorClone) {
 }
 
 # ---------------------------------------------------------------------
-# 3. Face venv (Wav2Lip / SadTalker / GFPGAN) — Python 3.14, torch cu128.
+# 3. Face venv (Wav2Lip / SadTalker / GFPGAN) - Python 3.14, torch cu128.
 # ---------------------------------------------------------------------
 if (-not $SkipFace) {
     New-Venv "envs\face"
@@ -149,6 +174,14 @@ if (-not $SkipFace) {
     }
     & "envs\face\Scripts\pip.exe" install gfpgan --no-deps
     & "envs\face\Scripts\pip.exe" install gdown  # for fetching the official Wav2Lip Google Drive weights
+    & "envs\face\Scripts\pip.exe" install lpips  # CodeFormer arch import-time dependency
+
+    # scripts\gfpgan_runner.py / codeformer_runner.py import
+    # echoface.util.restore_blend (pure-numpy region mask/blend, no
+    # torch/cv2) for --region mouth - install the orchestrator package
+    # (no deps, already satisfied by requirements-face.txt) into envs\face
+    # too so that import resolves.
+    & "envs\face\Scripts\pip.exe" install -e . --no-deps -q
 
     Write-Host "Verifying CUDA in envs\face (real tensor op)..." -ForegroundColor Green
     & "envs\face\Scripts\python.exe" -c "import torch; print('torch', torch.__version__); print('cuda available:', torch.cuda.is_available()); print('device:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'n/a'); a=torch.randn(512,512,device='cuda' if torch.cuda.is_available() else 'cpu'); print('matmul ok, sum=', (a@a).sum().item())"
@@ -157,7 +190,7 @@ if (-not $SkipFace) {
 }
 
 # ---------------------------------------------------------------------
-# 4. TTS venv (Piper / XTTS) — Python 3.14.
+# 4. TTS venv (Piper / XTTS) - Python 3.14.
 # ---------------------------------------------------------------------
 if (-not $SkipTts) {
     New-Venv "envs\tts"
@@ -176,7 +209,8 @@ Write-Host "== Next steps ==" -ForegroundColor Cyan
 Write-Host "1. Download model weights (see models\MODELS.md for the exact official"
 Write-Host "   URLs, versions, SHA256 and licences already used on this machine):"
 Write-Host "     - models\wav2lip\wav2lip_gan.pth        (Wav2Lip README -> Google Drive)"
-Write-Host "     - models\gfpgan\GFPGANv1.4.pth           (GFPGAN GitHub release)"
+Write-Host "     - models\gfpgan\GFPGANv1.4.pth           (GFPGAN GitHub release)
+     - models\codeformer\codeformer.pth       (CodeFormer GitHub release, optional restore engine, S-Lab non-commercial licence)"
 Write-Host "     - models\piper\en_US-lessac-medium.onnx(.json) (rhasspy/piper-voices on HF)"
 Write-Host "     - vendor\SadTalker\checkpoints\*         (SadTalker README -> GitHub release, optional)"
 Write-Host "2. Add a real portrait/idle asset + signed consent under consent\, and"

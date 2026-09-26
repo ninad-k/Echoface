@@ -37,6 +37,13 @@ lit photo, at least 1024px, neutral closed mouth, no hair or hands
 covering the mouth. A short clip of the person blinking naturally (rather
 than a frozen photo) looks more alive.
 
+New to a presenter and not sure what to create? `echoface presenter init
+<name>` scaffolds `assets\portraits\<name>\meta.yaml` and a `README.md`
+with a step-by-step consent checklist for you — it deliberately does
+**not** add a valid consent reference, so the render will still refuse
+until you complete the checklist and point `consent_ref` at a real
+document.
+
 ## 4. Make your first video
 ```
 echoface make --topic "3 habits of disciplined traders" --presenter <name>
@@ -76,7 +83,20 @@ echoface resume <job-id>
 ```
 Already-finished stages are skipped automatically.
 
-## 9. Key config options
+## 9. Cleaning up old renders
+`output\<job-id>\` folders accumulate over time. To see what could be
+freed without deleting anything:
+```
+echoface prune --older-than 30d --keep-final
+```
+This is a **dry run by default** — it only lists candidates and the
+space they'd free. Add `--delete` once you're happy with the list. With
+`--keep-final` (the default), each job's `final.mp4`/`metadata.json`/
+`job.json` are kept and only intermediate artefacts (voice/face/caption
+files) are removed; pass `--no-keep-final` to remove the whole job
+folder instead.
+
+## 10. Key config options
 Edit `config\echoface.yaml` (or make a copy and pass `--config
 your-config.yaml`). The ones you're most likely to touch:
 
@@ -84,16 +104,29 @@ your-config.yaml`). The ones you're most likely to touch:
   — where the face sits on screen.
 - `face.engine`: `wav2lip` (default, subtle mouth-only movement) or
   `sadtalker` (photo only, more natural head motion, slower).
-- `face.restore`: `gfpgan` (sharper face, default) or `none` (faster).
+- `face.restore`: `gfpgan` (sharper face, default), `codeformer`
+  (alternative restorer, **non-commercial licence** — see
+  `docs/security/license-matrix.md`), or `none` (faster).
+- `face.restore_region`: `face` (default, restores the whole detected
+  face) or `mouth` (restores only the mouth region with a feathered
+  blend — faster and can reduce artefacts elsewhere in the frame).
 - `voice.speed`: >1.0 speaks faster, <1.0 slower.
 - `compose.music`: path to a background music file (bring your own —
   royalty-free tracks only, not committed by this project).
+- `compose.pre_limiter_dbfs` / `compose.true_peak_dbtp` /
+  `compose.loudness_tolerance_lu`: loudness tuning knobs — the defaults
+  are self-correcting (compose re-measures the actual output file and
+  re-encodes once if it's out of spec), so you shouldn't normally need
+  to touch these.
+- `prune.older_than` / `prune.keep_final`: defaults used by `echoface
+  prune` when its own flags aren't passed.
 - `monetized`: set `true` if the channel is monetised — makes `doctor`
-  warn about models with non-commercial licences.
+  warn about every active model with a non-commercial licence (checked
+  against `models/licenses.yaml`).
 
 See `docs/ops/configuration-reference.md` for every option.
 
-## 10. Quality tips (from the spec's own checklist)
+## 11. Quality tips (from the spec's own checklist)
 - Hook in the first 2 seconds — no greetings or channel intros.
 - One idea per Short, 25–45 seconds, short sentences.
 - Cut or zoom every few seconds if you're editing further — Echoface's
@@ -115,7 +148,9 @@ your own machine*, not the internet. Everything else is fully offline.
 
 **Q: Why did it refuse to render my presenter?**
 A: You're missing a consent file, or `meta.yaml`'s `consent_ref` points
-at a file that doesn't exist. See step 3 above.
+at a file that doesn't exist. See step 3 above; `echoface presenter init
+<name>` scaffolds the folder and README checklist for you, and the CLI's
+own error message repeats these options when this happens.
 
 **Q: The face looks static/robotic.**
 A: That's an inherent limitation of local lip-sync models on modest
@@ -124,9 +159,10 @@ sadtalker` for more head motion, or a sharper/better-lit source photo.
 
 **Q: Can I use this for a monetised YouTube channel?**
 A: Check `docs/security/license-matrix.md` first — the default Wav2Lip
-model is research/non-commercial licensed. Run `echoface doctor` with
-`monetized: true` in your config to get a warning if your current setup
-has a licence conflict.
+model and the CodeFormer restoration option are research/non-commercial
+licensed. Run `echoface doctor` with `monetized: true` in your config to
+get a warning (checked against `models/licenses.yaml`) for every active
+model that has a licence conflict.
 
 **Q: It's using the wrong Ollama model / can't reach Ollama.**
 A: Run `ollama serve` in a terminal, `ollama pull qwen2.5:7b` (or your

@@ -32,13 +32,18 @@ automatable in CI.
 | FR-5.4 | Two-pass loudnorm within spec | `test_ffmpeg_util.py::test_parse_loudnorm_json_*`, `test_build_loudnorm_filter_*`; RT-7 (real measurement) |
 | FR-5.5 | Disclosure line in metadata | `test_compose_synthetic.py` asserts it; `tests/e2e/test_smoke_e2e.py` asserts it |
 | FR-6.1 | `make` command | `tests/e2e/test_smoke_e2e.py` |
-| FR-6.2 | `batch` command | `tests/integration/test_cli_commands.py::test_batch_missing_file_fails_cleanly` (happy path exercised manually/via code review — see improvements list for a gap) |
+| FR-6.2 | `batch` command | `tests/integration/test_cli_commands.py::test_batch_missing_file_fails_cleanly`; `tests/e2e/test_batch.py::test_batch_happy_path_renders_every_topic`, `test_batch_continues_past_a_single_job_failure` |
 | FR-6.3 | `resume` skip logic | `tests/unit/test_job.py::test_stage_skip_logic`; `tests/e2e/test_smoke_e2e.py::test_clean_then_resume` |
 | FR-6.4 | `clean --from` | `test_job.py::test_clean_invalidates_downstream`; `tests/integration/test_cli_commands.py::test_clean_resets_job_json_stage_status` |
 | FR-6.5 | `doctor` never crashes | `tests/unit/test_doctor.py::test_run_doctor_never_crashes_and_returns_checks`; `tests/integration/test_cli_commands.py::test_doctor_exits_zero_with_only_warnings` |
-| FR-6.6 | Config override precedence | `tests/integration/test_config_precedence.py` (all 5 cases) |
+| FR-6.6 | Config override precedence | `tests/integration/test_config_precedence.py` (all cases, incl. CLI-over-env regression) |
 | FR-6.7 | `--job-id` reuse preserves state | `test_job.py::test_create_with_existing_job_id_preserves_stage_state` |
 | FR-6.8 | Consent gate | `test_job.py::test_consent_check_*`; `tests/integration/test_cli_commands.py::test_make_refuses_presenter_without_consent` |
+| FR-6.9 | `presenter init` scaffolding | `tests/integration/test_cli_commands.py::test_presenter_init_scaffolds_meta_yaml_without_weakening_consent_gate`, `test_presenter_init_refuses_to_overwrite_without_force` |
+| FR-6.10 | `prune` dry-run/delete | `tests/unit/test_prune.py` (13 tests); `tests/integration/test_cli_commands.py::test_prune_dry_run_does_not_delete`, `test_prune_with_delete_flag_removes_intermediates_keeps_final` |
+| FR-6.11 | Licence-table-driven doctor check | `tests/unit/test_licenses.py` (7 tests, incl. real-file smoke test) |
+| FR-6.12 | CodeFormer restoration | `tests/unit/test_face_stage.py::test_apply_restore_codeformer_builds_correct_command`; RT (real GPU): direct-runner + full-orchestrator verification, see `docs/project/improvements-and-known-issues.md` #2 |
+| FR-6.13 | Mouth-region restoration | `tests/unit/test_restore_blend.py` (8 tests); real GPU frame-extraction check, see improvements doc #9 |
 | NFR-1 | Cross-platform orchestrator | `.github/workflows/ci.yml` matrix (ubuntu-latest, windows-latest) |
 | NFR-2/3 | Performance / 4GB-safe | RT-3/RT-4 timings; `run_with_oom_retry` unit tests |
 | NFR-4 | No redundant re-work | `tests/integration/test_compose_synthetic.py::test_compose_stage_is_idempotent_via_is_done` |
@@ -48,3 +53,5 @@ automatable in CI.
 | NFR-8 | Lint/type/coverage gates | `.github/workflows/ci.yml::lint` job |
 | NFR-9 | Secret/PII hygiene | `.github/workflows/ci.yml::gitleaks` job, `.pre-commit-config.yaml` |
 | NFR-10 | Consent enforced in code | Same as FR-6.8 |
+| NFR-11 | Adaptive loudness robustness | `tests/integration/test_compose_synthetic.py::test_compose_stage_hits_loudness_spec_on_varied_audio_profiles` (4 profiles); real-render re-verification on `real-e2e-001`/`real-e2e-sadtalker` |
+| NFR-12 | Real-engine GPU regression tier | `tests/gpu/test_real_engines.py`, run via `scripts/run_gpu_tests.ps1` — 5 passed in 63.49s |

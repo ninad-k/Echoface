@@ -14,6 +14,7 @@ MIT (`LICENSE`).
 | Rudrabha/Wav2Lip | No explicit repo licence file found upstream at time of writing — treat as "all rights reserved by default" for anything beyond fair-use research/reference until the upstream project states otherwise | Not confirmed — see model-weight row below regardless, since the weights are explicitly research/non-commercial |
 | OpenTalker/SadTalker | Apache-2.0 (code), except listed third-party components | Yes, for the code; verify each checkpoint's own terms (below) |
 | TencentARC/GFPGAN | Apache-2.0 | Yes, for the code |
+| sczhou/CodeFormer | **S-Lab License 1.0 — non-commercial research/academic use only** | **No** |
 
 ## Model weights (see `models/MODELS.md` for exact source URLs/SHA256)
 
@@ -28,15 +29,19 @@ MIT (`LICENSE`).
 | SadTalker checkpoints (M8) | OpenTalker/SadTalker GitHub releases | Apache-2.0 (code); underlying 3DMM/BFM/face-vid2vid sub-models each carry their own terms | Check each sub-model before monetising |
 | faster-whisper `small` | Systran/faster-whisper-small (HF) | MIT (code); Whisper weights MIT | Yes |
 | XTTS v2 (M8) | coqui/XTTS-v2 (HF) | **Coqui Public Model License (CPML) — non-commercial** | **No** |
+| CodeFormer `codeformer.pth` | sczhou/CodeFormer GitHub release | **S-Lab License 1.0 — non-commercial only** | **No** |
 
 ## `echoface doctor`'s enforcement
-`_check_monetization_licence` in `echoface/doctor.py` warns (not a hard
-failure — the tool doesn't try to be a legal gate) when `monetized: true`
-and `face.engine: wav2lip` (the currently-flagged non-commercial default)
-is selected. It does not yet check every row above programmatically —
-XTTS's CPML licence, for instance, is documented but not (yet)
-cross-checked by `doctor`. See
-`docs/project/improvements-and-known-issues.md`.
+`_check_monetization_licence` in `echoface/doctor.py` now drives its check
+off a machine-readable table, `models/licenses.yaml` (loaded via
+`echoface/licenses.py`), which mirrors every row above with a dotted-path
+`match` condition against the active config. When `monetized: true`, it
+walks every entry, resolves which models are actually active for the
+given config, and emits a warning for each non-commercial one — Wav2Lip,
+XTTS, CodeFormer, and any `check`-status model (S3FD, SadTalker/GFPGAN
+sub-checkpoints) included, not just the previously-hardcoded Wav2Lip
+case. Keep `models/licenses.yaml` and this table in sync when adding a
+new engine or model.
 
 ## Guidance if you intend to monetise
 1. Run `echoface doctor` with `monetized: true` in config and read every
@@ -50,3 +55,6 @@ cross-checked by `doctor`. See
    (`docs/dev/adding-a-stage-or-engine.md`).
 4. For XTTS v2: do not use in monetised content under the CPML terms as
    downloaded; Piper (MIT) has no such restriction.
+5. For CodeFormer: `restore: codeformer` is non-commercial (S-Lab
+   License 1.0); use `restore: gfpgan` (Apache-2.0 code, weights still
+   worth a quick check) or `restore: none` for monetised output.

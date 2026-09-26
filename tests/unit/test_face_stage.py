@@ -1,4 +1,5 @@
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -196,3 +197,68 @@ def test_resolve_face_source_photo_explicit(tmp_path):
 def test_resolve_face_source_raises_when_nothing_found(tmp_path):
     with pytest.raises(FaceEngineError):
         resolve_face_source(tmp_path, "idle")
+
+
+def test_apply_restore_codeformer_builds_correct_command(tmp_path, monkeypatch):
+    """FaceStage._apply_restore must invoke scripts/codeformer_runner.py
+    (not gfpgan_runner.py) when method='codeformer', with --region passed
+    through from face.restore_region."""
+    from echoface.job import Job
+    from echoface.stages.face import FaceStage
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        # Simulate the runner having written the output file.
+        out_idx = cmd.index("--outfile") + 1
+        Path(cmd[out_idx]).write_bytes(b"fake restored video")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("echoface.stages.face.subprocess.run", fake_run)
+
+    job = Job.create(topic="restore test", root=tmp_path, job_id="restore-test")
+    cfg = FaceConfig(restore="codeformer", restore_region="mouth", device="cpu")
+    from echoface.config import EchofaceConfig
+
+    full_cfg = EchofaceConfig(face=cfg)
+    stage = FaceStage(job, full_cfg)
+
+    video_path = job.path_for("face.mp4")
+    video_path.write_bytes(b"original video")
+    stage._apply_restore(video_path, "codeformer")
+
+    cmd = captured["cmd"]
+    assert "scripts/codeformer_runner.py" in cmd
+    assert "gfpgan_runner.py" not in " ".join(cmd)
+    assert "--region" in cmd
+    assert cmd[cmd.index("--region") + 1] == "mouth"
+    assert video_path.read_bytes() == b"fake restored video"
+
+
+def test_apply_restore_gfpgan_builds_correct_command(tmp_path, monkeypatch):
+    from echoface.job import Job
+    from echoface.stages.face import FaceStage
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        out_idx = cmd.index("--outfile") + 1
+        Path(cmd[out_idx]).write_bytes(b"fake restored video")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("echoface.stages.face.subprocess.run", fake_run)
+
+    job = Job.create(topic="restore test 2", root=tmp_path, job_id="restore-test-2")
+    from echoface.config import EchofaceConfig
+
+    full_cfg = EchofaceConfig(face=FaceConfig(restore="gfpgan", restore_region="face", device="cpu"))
+    stage = FaceStage(job, full_cfg)
+    video_path = job.path_for("face.mp4")
+    video_path.write_bytes(b"original video")
+    stage._apply_restore(video_path, "gfpgan")
+
+    cmd = captured["cmd"]
+    assert "scripts/gfpgan_runner.py" in cmd
+    assert cmd[cmd.index("--region") + 1] == "face"

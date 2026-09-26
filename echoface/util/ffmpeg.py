@@ -144,6 +144,28 @@ def build_ping_pong_plan(clip_duration_s: float, target_duration_s: float) -> li
     return segments
 
 
+def fold_pingpong_index(i: int, original_len: int) -> int:
+    """Map a frame index `i` in a ping-pong-extended sequence (forward,
+    reverse, forward, reverse, ...) back to the index of the ORIGINAL
+    frame it's a copy of, via triangle-wave folding.
+
+    A ping-pong of an N-frame clip has period ``2*(N-1)`` for N > 1 (the
+    last and first frames of each forward/reverse leg aren't repeated):
+    frame sequence is 0,1,...,N-1,N-2,...,1,0,1,2,...  Used to real-dedupe
+    face-detection work across the forward/reverse halves of a single
+    ping-pong render (see ``scripts/wav2lip_runner.py``'s ``BoxCache`` and
+    ``face.py``'s ``Wav2LipEngine`` — previously the cache only deduped
+    *whole-render* repeats, not the two ping-pong halves of one render).
+
+    For N <= 1 (nothing to fold) returns `i` unchanged.
+    """
+    if original_len <= 1:
+        return i
+    period = 2 * (original_len - 1)
+    pos = i % period
+    return pos if pos < original_len else period - pos
+
+
 def build_chunk_plan(total_duration_s: float, chunk_seconds: float = 40.0) -> list[tuple[float, float]]:
     """Split a long audio duration into (start, duration) chunks no longer
     than ``chunk_seconds`` each, for the face stage. Returns a single chunk
@@ -323,6 +345,7 @@ def build_compose_filtergraph(
     loudness_lufs: float,
     music_volume_db: float,
     loudnorm_filter: str | None = None,
+    pre_limiter_db: float | None = -9.0,
 ) -> dict:
     """Build the filtergraph pieces for the compose stage.
 
@@ -377,6 +400,7 @@ def build_compose_filtergraph(
         music_volume_db=music_volume_db,
         voice_input_idx=2,
         music_input_idx=3,
+        pre_limiter_db=pre_limiter_db,
     )
     parts.append(premix["filter_complex"])
 

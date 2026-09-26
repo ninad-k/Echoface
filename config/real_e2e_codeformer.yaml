@@ -1,0 +1,48 @@
+# Example config used to verify the real (non-dummy) pipeline end to end on
+# this machine: Piper voice, Wav2Lip + GFPGAN face, faster-whisper captions,
+# ffmpeg compose. See README's "Real end-to-end verification" section.
+presenter: realtest
+language: en
+target_seconds: 20
+monetized: false
+
+script:
+  engine: ollama
+  model: qwen2.5:7b
+  template: prompts/short_default.md
+  temperature: 0.7
+
+voice:
+  engine: piper
+  piper_exe: envs/tts/Scripts/piper.exe
+  piper_model: models/piper/en_US-lessac-medium.onnx
+  speed: 1.05
+
+face:
+  engine: wav2lip
+  source: photo
+  restore: codeformer
+  batch_size: 32          # 8 GB VRAM handles the default batch fine
+  face_det_batch_size: 8
+  device: auto
+  resize_factor: 1
+
+captions:
+  engine: whisper
+  model: small
+  device: cpu
+  compute_type: int8
+  max_words_per_line: 3
+
+compose:
+  width: 1080
+  height: 1920
+  fps: 30
+  layout: face_top
+  background: null
+  music: null
+  duck_under_voice: false
+  loudness_lufs: -14       # target integrated loudness (two-pass loudnorm)
+  true_peak_dbtp: -2.5     # pre-encode TP ceiling (margin for AAC overshoot; final <= -1 dBTP)
+  loudness_lra: 11
+  crf: 19

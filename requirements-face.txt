@@ -27,3 +27,5 @@ safetensors
 gdown
 audioop-lts  # stdlib `audioop` was removed in Python 3.13+; SadTalker's
              # pydub dependency needs this backport instead.
+lpips        # CodeFormer's arch module imports it at load time (inference
+             # doesn't otherwise use it - it's a training-loss module)

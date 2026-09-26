@@ -6,6 +6,75 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-26
+
+A follow-up hardening pass working through every item in
+`docs/project/improvements-and-known-issues.md`'s v0.1.0 backlog. See
+that doc for full detail on each item (resolved-with-how, or
+deferred-with-why); this section summarises what shipped.
+
+### Changed
+- **Config precedence flipped**: was `env > CLI > yaml > default`, now
+  `CLI flag > environment variable (.env) > config/*.yaml > pydantic
+  default` — an explicit `--flag` now always wins over an ambient
+  `.env` value. See ADR-0008.
+- Loudness tuning is now adaptive rather than static: `ComposeStage`
+  measures the **actual final encoded file** and re-encodes once (with
+  corrected offsets) if it lands outside ±0.5 LU / above the configured
+  true-peak ceiling. New config fields: `compose.pre_limiter_dbfs`,
+  `compose.true_peak_dbtp`, `compose.loudness_tolerance_lu`,
+  `compose.loudness_hard_tp_ceiling_dbtp`,
+  `compose.loudness_max_encode_attempts`. See ADR-0009.
+- `echoface doctor`'s licence check is now driven by a machine-readable
+  table (`models/licenses.yaml`) instead of a single hardcoded Wav2Lip
+  case, and flags every active non-commercial model when
+  `monetized: true`.
+- The consent-gate refusal error now prints a "what to do next" block
+  (presenter init, smoketest demo, docs link) instead of a bare error.
+
+### Added
+- **CodeFormer face restoration** (`face.restore: codeformer`) — real
+  implementation against the official sczhou/CodeFormer source and
+  GitHub-release weights (`scripts/codeformer_runner.py`). S-Lab
+  License 1.0 (non-commercial); documented in `models/MODELS.md`,
+  `docs/security/license-matrix.md`, and `models/licenses.yaml`.
+- `face.restore_region: face|mouth` — mouth-only restoration with a
+  feathered blend (`echoface/util/restore_blend.py`), shared by the
+  GFPGAN and CodeFormer runners.
+- `echoface presenter init <name>` — scaffolds
+  `assets/portraits/<name>/{meta.yaml,README.md}` with a consent
+  checklist, without weakening the consent gate (the scaffolded
+  `consent_ref` intentionally points at a not-yet-existing file).
+- `echoface prune --older-than 30d --keep-final [--delete]` — job
+  output retention. Dry-run by default; deletion requires the explicit
+  `--delete` flag.
+- Face-box cache dedupe across a ping-pong render's forward/reverse
+  halves (`fold_pingpong_index()`), avoiding redundant face detection
+  on frames that are mirrors of already-detected ones.
+- Real-GPU regression test tier: `tests/gpu/test_real_engines.py`
+  (marked `gpu`/`ollama`/`slow`, skipped by default), runnable locally
+  via `scripts/run_gpu_tests.ps1`, and a `workflow_dispatch`-only
+  `.github/workflows/gpu-tests.yml` for an optional self-hosted GPU
+  runner (not registered as part of this change — see the workflow
+  file for how to add one).
+- `tests/e2e/test_batch.py` — happy-path and failure-continuation
+  coverage for `echoface batch`.
+- `docs/architecture/adr/0008-config-precedence-cli-over-env.md` and
+  `docs/architecture/adr/0009-loudness-robustness.md`.
+
+### Fixed
+- mypy now covers `scripts/*_runner.py` (previously excluded) — the
+  project's existing `ignore_missing_imports = true` was sufficient
+  once several redundant `# type: ignore` comments and a stray
+  namespace-package `gfpgan/` directory at the repo root were cleaned
+  up. `pyproject.toml`'s `[tool.mypy] exclude` is now just
+  `["vendor/"]`.
+- Several bugs found while implementing the above — see
+  `docs/project/improvements-and-known-issues.md`'s "Fixed in the
+  v0.2.0 pass" section for detail (a PowerShell string-encoding bug in
+  the new GPU test runner, a test-fixture mismatch in the new batch
+  test, and the stray `gfpgan/` directory above).
+
 ## [0.1.0] - 2026-09-26
 
 First public release. Milestones M1–M8 from the original design spec are

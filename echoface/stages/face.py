@@ -229,13 +229,20 @@ class Wav2LipEngine(FaceEngine):
         # inference.py does on its own (a plain modulo repeat).
         render_source = face_source
         temp_extended = None
+        pingpong_original_frames = 0
+        pingpong_fps = 25
         if face_source.suffix.lower() in (".mp4", ".mov", ".mkv", ".webm"):
             audio_duration = ffm.probe(audio_path).duration_s
             clip_duration = ffm.probe(face_source).duration_s
             if clip_duration < audio_duration:
                 temp_extended = out_path.parent / f"_{face_source.stem}_extended.mp4"
-                build_looped_idle_video(face_source, audio_duration, temp_extended)
+                build_looped_idle_video(face_source, audio_duration, temp_extended, fps=pingpong_fps)
                 render_source = temp_extended
+                # scripts/wav2lip_runner.py needs the ORIGINAL clip's frame
+                # count (as re-encoded at pingpong_fps by
+                # build_looped_idle_video) to dedupe face detection across
+                # the forward/reverse halves via fold_pingpong_index.
+                pingpong_original_frames = max(1, round(clip_duration * pingpong_fps))
 
         pads = " ".join(str(p) for p in cfg.pads)
 
@@ -268,6 +275,8 @@ class Wav2LipEngine(FaceEngine):
                 str(cache_file),
                 "--cache_key",
                 cache_key,
+                "--pingpong_original_frames",
+                str(pingpong_original_frames),
             ]
             return cmd
 
@@ -463,37 +472,61 @@ class FaceStage(Stage):
             # SadTalker applies GFPGAN inline via its own --enhancer flag
             # (see SadTalkerEngine.render) — skip the separate pass here to
             # avoid restoring twice. Dummy engine also skips (no real face).
-            self._apply_restore(out_path)
-        elif face_cfg.restore == "codeformer" and face_cfg.engine != "dummy" and self.logger:
-            self.logger.warning(
-                "[face] restore=codeformer requested but not implemented (only gfpgan is wired up); skipping restoration"
-            )
+            self._apply_restore(out_path, "gfpgan")
+        elif face_cfg.restore == "codeformer" and face_cfg.engine != "dummy":
+            # CodeFormer has no engine that applies it inline, so it always
+            # runs as this separate post-process pass regardless of
+            # face.engine (wav2lip or sadtalker).
+            self._apply_restore(out_path, "codeformer")
 
-    def _apply_restore(self, video_path: Path) -> None:
-        """Real GFPGAN mouth/face restoration via scripts/gfpgan_runner.py
-        (subprocess into envs\\face). Restores in place (writes to a temp
-        file, then replaces video_path)."""
+    def _apply_restore(self, video_path: Path, method: str) -> None:
+        """Real GFPGAN or CodeFormer face/mouth restoration via
+        scripts/{gfpgan,codeformer}_runner.py (subprocess into
+        envs\\face). Restores in place (writes to a temp file, then
+        replaces video_path). `face.restore_region` ("face" or "mouth")
+        is passed through to either runner identically — see
+        echoface.util.restore_blend."""
         restored = video_path.parent / f"_{video_path.stem}_restored.mp4"
         device = self.cfg.face.device
         if device == "auto":
             device = "cuda" if detect_gpu().available else "cpu"
-        cmd = [
-            resolve_exe("envs/face/Scripts/python.exe"),
-            "scripts/gfpgan_runner.py",
-            "--input",
-            str(video_path),
-            "--outfile",
-            str(restored),
-            "--model_path",
-            "models/gfpgan/GFPGANv1.4.pth",
-            "--device",
-            device,
-        ]
+        python_exe = resolve_exe("envs/face/Scripts/python.exe")
+        region = self.cfg.face.restore_region
+
+        if method == "gfpgan":
+            cmd = [
+                python_exe,
+                "scripts/gfpgan_runner.py",
+                "--input",
+                str(video_path),
+                "--outfile",
+                str(restored),
+                "--model_path",
+                "models/gfpgan/GFPGANv1.4.pth",
+                "--device",
+                device,
+                "--region",
+                region,
+            ]
+        else:  # codeformer
+            cmd = [
+                python_exe,
+                "scripts/codeformer_runner.py",
+                "--input",
+                str(video_path),
+                "--outfile",
+                str(restored),
+                "--device",
+                device,
+                "--region",
+                region,
+            ]
+
         if self.logger:
-            self.logger.info("[face] running GFPGAN restoration...")
+            self.logger.info(f"[face] running {method} restoration (region={region})...")
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             raise FaceEngineError(
-                f"GFPGAN restoration failed: {(result.stdout or '') + (result.stderr or '')}"
+                f"{method} restoration failed: {(result.stdout or '') + (result.stderr or '')}"
             )
         restored.replace(video_path)

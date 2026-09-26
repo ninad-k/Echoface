@@ -108,3 +108,5 @@ See `docs/architecture/adr/` — one ADR per significant decision:
 - [0005 — Idempotent stage hashing](adr/0005-idempotent-stage-hashing.md)
 - [0006 — Consent gate as a code-level check](adr/0006-consent-gate.md)
 - [0007 — Dummy engines for GPU-free testing](adr/0007-dummy-engines.md)
+- [0008 — Config precedence: CLI flag beats environment variable](adr/0008-config-precedence-cli-over-env.md)
+- [0009 — Loudness self-verification and corrective re-encode](adr/0009-loudness-robustness.md)

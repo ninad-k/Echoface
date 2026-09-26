@@ -64,9 +64,14 @@ test names throughout `tests/`. Status reflects v0.1.0.
 | FR-6.3 | `echoface resume <job-id>` SHALL continue a job, skipping stages whose config hash and outputs are unchanged. | Done | `cli.py::resume`, `Job.is_stage_done` |
 | FR-6.4 | `echoface clean <job-id> --from <stage>` SHALL invalidate that stage and every downstream stage, deleting their outputs. | Done | `cli.py::clean`, `Job.clean_from` |
 | FR-6.5 | `echoface doctor` SHALL report environment/model/consent status without ever raising an unhandled exception. | Done | `echoface/doctor.py::run_doctor` |
-| FR-6.6 | CLI flags SHALL override `config/*.yaml`, which SHALL be overridden by environment variables for the specific machine-bound keys in `.env.example`. | Done | `echoface/config.py::load_config`, `_apply_env_overrides` |
+| FR-6.6 | CLI flags SHALL override environment variables (`.env`), which SHALL override `config/*.yaml`, which SHALL override pydantic field defaults. | Done | `echoface/config.py::load_config` — see ADR-0008 |
 | FR-6.7 | Re-running `make` with an explicit `--job-id` that already exists SHALL preserve prior stage progress rather than discarding it. | Done | `Job.create` (load-if-exists path) |
 | FR-6.8 | Rendering SHALL be refused for a presenter with no resolvable `consent_ref`. | Done | `check_presenter_consent`, enforced in `run_pipeline` |
+| FR-6.9 | `echoface presenter init <name>` SHALL scaffold a new presenter folder (`meta.yaml`, consent checklist) without creating a resolvable `consent_ref`, so FR-6.8's gate still applies. | Done | `cli.py::presenter_init` |
+| FR-6.10 | `echoface prune` SHALL identify job output directories older than a configurable threshold and SHALL NOT delete anything unless an explicit `--delete` flag is passed. | Done | `echoface/prune.py`, `cli.py::prune` |
+| FR-6.11 | `echoface doctor` SHALL cross-check every active model in the resolved config against a machine-readable licence table and SHALL warn on each non-commercial model when `monetized: true`. | Done | `echoface/licenses.py`, `doctor.py::_check_monetization_licence`, `models/licenses.yaml` |
+| FR-6.12 | `face.restore` SHALL support a `codeformer` option using the official sczhou/CodeFormer weights, in addition to `gfpgan` and `none`. | Done | `scripts/codeformer_runner.py`, `echoface/stages/face.py::_apply_restore` |
+| FR-6.13 | `face.restore_region` SHALL support restoring either the whole detected face (`face`) or a feathered mouth-only crop (`mouth`). | Done | `echoface/util/restore_blend.py` |
 
 ## 2. Non-functional requirements
 
@@ -82,6 +87,8 @@ test names throughout `tests/`. Status reflects v0.1.0.
 | NFR-8 | Maintainability | The codebase SHALL pass `ruff check`/`ruff format --check`/`mypy` with zero errors and ≥80% branch-aware test coverage on pure-logic modules. | `.github/workflows/ci.yml` `lint` job; `pyproject.toml` `[tool.coverage]` |
 | NFR-9 | Security | No secret, credential, or personally-identifying path SHALL be committed; every model download SHALL be from an official source with a recorded checksum. | `gitleaks` CI job, `models/MODELS.md` |
 | NFR-10 | Consent/compliance | The consent gate (FR-6.8) SHALL be enforced in code, not merely documented. | `tests/unit/test_job.py::test_consent_check_*`, `tests/integration/test_cli_commands.py::test_make_refuses_presenter_without_consent` |
+| NFR-11 | Loudness robustness | The compose stage SHALL measure the actual final encoded output's loudness and SHALL re-encode with corrected parameters (up to a configurable attempt limit) if it falls outside the configured tolerance. | `tests/integration/test_compose_synthetic.py::test_compose_stage_hits_loudness_spec_on_varied_audio_profiles`; ADR-0009 |
+| NFR-12 | Real-engine regression | A GPU-marked test tier SHALL exercise every real heavy engine (Wav2Lip, GFPGAN, CodeFormer, Piper, Ollama) on tiny inputs, excluded from the default CI run but runnable on demand. | `tests/gpu/test_real_engines.py`, `scripts/run_gpu_tests.ps1`, `.github/workflows/gpu-tests.yml` (`workflow_dispatch`, self-hosted+gpu) |
 
 ## 3. Constraints
 

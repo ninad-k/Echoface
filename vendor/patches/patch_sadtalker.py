@@ -6,6 +6,7 @@ for each of these three NumPy 2.x compatibility fixes.
 Usage:
     python vendor/patches/patch_sadtalker.py <path-to-vendor-SadTalker-checkout>
 """
+
 from __future__ import annotations
 
 import sys
@@ -18,7 +19,9 @@ def _replace_once(path: Path, old: str, new: str, label: str) -> None:
         print(f"{label}: already patched, skipping")
         return
     if old not in content:
-        raise RuntimeError(f"{label}: expected pattern not found in {path}; SadTalker's source may have changed")
+        raise RuntimeError(
+            f"{label}: expected pattern not found in {path}; SadTalker's source may have changed"
+        )
     path.write_text(content.replace(old, new), encoding="utf-8")
     print(f"{label}: patched {path}")
 

@@ -3,7 +3,7 @@
 Source of truth: `echoface/config.py` (pydantic models). This page mirrors
 it; if they disagree, the code wins — please file an issue.
 
-Precedence: **environment variable > CLI flag > `config/*.yaml` > pydantic
+Precedence: **CLI flag > environment variable > `config/*.yaml` > pydantic
 default** (see `echoface/config.py::load_config`).
 
 ## Top-level

@@ -26,10 +26,13 @@ Last updated: v0.1.0 publication pass.
 
 | ID | Issue | Severity | Tracking |
 |---|---|---|---|
-| I-1 | `face.restore: codeformer` is accepted by config but not implemented (logs a warning, no-ops) | Low | `docs/project/improvements-and-known-issues.md` #? |
-| I-2 | `anchor1` sample presenter intentionally has no valid consent file, which is correct for its purpose but can confuse a new user who tries to render with it directly | Low | Documented in README/user manual |
-| I-3 | Doctor's Ollama-reachability check used a fixed 3s timeout that occasionally false-negatived under load | Low | Fixed in this pass — now `ECHOFACE_DOCTOR_TIMEOUT_S`-configurable, default unchanged |
-| I-4 | mypy is not run on `scripts/*_runner.py` (excluded) since they import optional heavy deps (torch/cv2) not installed in the orchestrator's type-check env | Low | Documented exclusion in `pyproject.toml` `[tool.mypy]` |
+| I-1 | `face.restore: codeformer` was accepted by config but not implemented (logged a warning, no-op) | Low | **Resolved in v0.2.0** — real implementation, `scripts/codeformer_runner.py`; see `docs/project/improvements-and-known-issues.md` #2 |
+| I-2 | `anchor1` sample presenter intentionally has no valid consent file, which is correct for its purpose but can confuse a new user who tries to render with it directly | Low | **Resolved in v0.2.0** — friendlier refusal message + `echoface presenter init`; see improvements doc #5 |
+| I-3 | Doctor's Ollama-reachability check used a fixed 3s timeout that occasionally false-negatived under load | Low | Fixed in v0.1.0 pass — now `ECHOFACE_DOCTOR_TIMEOUT_S`-configurable, default unchanged |
+| I-4 | mypy was not run on `scripts/*_runner.py` (excluded) since they import optional heavy deps (torch/cv2) not installed in the orchestrator's type-check env | Low | **Resolved in v0.2.0** — exclude list dropped to just `vendor/`; see improvements doc #10 |
+| I-5 | No job output retention/pruning — `output/<job-id>/` accumulates indefinitely | Low | **Resolved in v0.2.0** — `echoface prune`; see improvements doc #7 |
+| I-6 | Face-box cache didn't dedupe across a ping-pong render's forward/reverse halves | Low | **Resolved in v0.2.0**, with a documented gap — see improvements doc #8 (wiring not independently GPU-re-verified on a real ping-pong render) |
+| I-7 | No automated real-GPU regression tests — engine verification was manual/checklist-only | Medium | **Resolved in v0.2.0** — `tests/gpu/`, `scripts/run_gpu_tests.ps1`, `gpu-tests.yml`; see improvements doc #4 |
 
 ## Dependencies
 

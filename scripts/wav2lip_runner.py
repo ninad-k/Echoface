@@ -47,6 +47,8 @@ import cv2
 import numpy as np
 import torch
 
+from echoface.util.ffmpeg import fold_pingpong_index
+
 VENDOR_ROOT = Path(__file__).resolve().parent.parent / "vendor" / "Wav2Lip"
 
 MEL_STEP_SIZE = 16
@@ -58,10 +60,10 @@ def _import_vendor():
     imports like `import audio`, `from models import Wav2Lip`)."""
     sys.path.insert(0, str(VENDOR_ROOT))
     try:
-        import audio  # type: ignore
-        import face_detection  # type: ignore
+        import audio
+        import face_detection
 
-        from models import Wav2Lip  # type: ignore
+        from models import Wav2Lip
     finally:
         sys.path.remove(str(VENDOR_ROOT))
     return audio, Wav2Lip, face_detection
@@ -82,6 +84,15 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--fps", type=float, default=25.0)
     p.add_argument("--cache_file", default=None, help="JSON face-box cache path")
     p.add_argument("--cache_key", default=None, help="stable key for the presenter/source clip")
+    p.add_argument(
+        "--pingpong_original_frames",
+        type=int,
+        default=0,
+        help="if the --face video is a ping-pong (forward/reverse) extension of a short "
+        "original clip, the ORIGINAL clip's frame count - enables real dedup of face "
+        "detection across the forward/reverse halves via fold_pingpong_index (0 = not a "
+        "ping-pong extension, detect every frame independently, the old behaviour)",
+    )
     return p.parse_args()
 
 
@@ -146,41 +157,80 @@ class BoxCache:
         self.path.write_text(json.dumps(self._data), encoding="utf-8")
 
 
-def face_detect(
-    images, face_detection_module, device, batch_size, pads, nosmooth, cache: BoxCache, cache_key
-):
-    n_frames = len(images)
-    cached = cache.get(cache_key, n_frames)
-    if cached is not None:
-        boxes = np.array(cached, dtype=float)
-    else:
-        detector = face_detection_module.FaceAlignment(
-            face_detection_module.LandmarksType._2D, flip_input=False, device=device
-        )
-        predictions = []
-        bs = batch_size
-        i = 0
-        while i < len(images):
-            batch = np.array(images[i : i + bs])
-            predictions.extend(detector.get_detections_for_batch(batch))
-            i += bs
-        del detector
+def _detect_boxes_for_frames(images, face_detection_module, device, batch_size, pads) -> np.ndarray:
+    """Run real S3FD detection on exactly the given frames (no caching,
+    no ping-pong awareness — that's the caller's job) and return an
+    (N, 4) array of [x1, y1, x2, y2] boxes."""
+    detector = face_detection_module.FaceAlignment(
+        face_detection_module.LandmarksType._2D, flip_input=False, device=device
+    )
+    predictions = []
+    bs = batch_size
+    i = 0
+    while i < len(images):
+        batch = np.array(images[i : i + bs])
+        predictions.extend(detector.get_detections_for_batch(batch))
+        i += bs
+    del detector
 
-        raw_boxes = []
-        pady1, pady2, padx1, padx2 = pads
-        for rect, image in zip(predictions, images, strict=True):
-            if rect is None:
-                raise ValueError(
-                    "Face not detected in one or more frames of the presenter clip. "
-                    "Use a front-facing, well-lit portrait/idle clip."
-                )
-            y1 = max(0, rect[1] - pady1)
-            y2 = min(image.shape[0], rect[3] + pady2)
-            x1 = max(0, rect[0] - padx1)
-            x2 = min(image.shape[1], rect[2] + padx2)
-            raw_boxes.append([x1, y1, x2, y2])
-        boxes = np.array(raw_boxes, dtype=float)
-        cache.set(cache_key, n_frames, boxes.tolist())
+    raw_boxes = []
+    pady1, pady2, padx1, padx2 = pads
+    for rect, image in zip(predictions, images, strict=True):
+        if rect is None:
+            raise ValueError(
+                "Face not detected in one or more frames of the presenter clip. "
+                "Use a front-facing, well-lit portrait/idle clip."
+            )
+        y1 = max(0, rect[1] - pady1)
+        y2 = min(image.shape[0], rect[3] + pady2)
+        x1 = max(0, rect[0] - padx1)
+        x2 = min(image.shape[1], rect[2] + padx2)
+        raw_boxes.append([x1, y1, x2, y2])
+    return np.array(raw_boxes, dtype=float)
+
+
+def face_detect(
+    images,
+    face_detection_module,
+    device,
+    batch_size,
+    pads,
+    nosmooth,
+    cache: BoxCache,
+    cache_key,
+    pingpong_original_frames: int = 0,
+):
+    """Detect (or fetch cached) face boxes for every frame in `images`.
+
+    If `pingpong_original_frames` > 0, `images` is assumed to be a
+    ping-pong (forward/reverse) extension of that many original frames
+    (see echoface.stages.face.build_looped_idle_video /
+    echoface.util.ffmpeg.fold_pingpong_index) — real detection then runs
+    ONLY on the unique original frames (roughly half the work for a
+    single forward+reverse cycle, more for longer renders that repeat the
+    cycle), and every other frame's box is looked up via triangle-wave
+    folding instead of re-detected. This is a real dedup *within* one
+    render, on top of BoxCache's existing dedup *across* repeat renders.
+    """
+    n_frames = len(images)
+    is_pingpong = pingpong_original_frames > 0 and pingpong_original_frames < n_frames
+    detect_len = pingpong_original_frames if is_pingpong else n_frames
+
+    cached = cache.get(cache_key, detect_len)
+    if cached is not None:
+        unique_boxes = np.array(cached, dtype=float)
+    else:
+        detect_images = images[:detect_len] if is_pingpong else images
+        unique_boxes = _detect_boxes_for_frames(
+            detect_images, face_detection_module, device, batch_size, pads
+        )
+        cache.set(cache_key, detect_len, unique_boxes.tolist())
+
+    if is_pingpong:
+        fold_indices = [fold_pingpong_index(i, pingpong_original_frames) for i in range(n_frames)]
+        boxes = unique_boxes[fold_indices]
+    else:
+        boxes = unique_boxes
 
     if not nosmooth:
         boxes = get_smoothened_boxes(boxes, t=5)
@@ -281,6 +331,7 @@ def main() -> int:
         args.nosmooth,
         cache,
         args.cache_key,
+        pingpong_original_frames=0 if is_static else args.pingpong_original_frames,
     )
     if is_static:
         face_det_results = face_det_results * 1  # single-entry list; datagen cycles via % len(frames)

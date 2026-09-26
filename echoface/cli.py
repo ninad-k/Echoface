@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import typer
@@ -71,6 +72,17 @@ def run_pipeline(
             check_presenter_consent(cfg.presenter)
         except ConsentError as exc:
             console.print(f"[bold red]Consent check failed:[/] {exc}")
+            console.print(
+                "\n[yellow]What to do next:[/]\n"
+                f"  - New presenter? Run: [bold]echoface presenter init {cfg.presenter}[/] "
+                "to scaffold assets/portraits/<name>/meta.yaml, then add your real consent "
+                "document under consent/ and a portrait/idle clip.\n"
+                "  - Just trying Echoface out? Use the bundled demo presenter instead: "
+                "[bold]--presenter smoketest --config tests/fixtures/dummy.yaml[/] "
+                "(no GPU, no consent subject - synthetic placeholder only).\n"
+                "  - Full guide: docs/security/responsible-use-consent-policy.md and "
+                "docs/user-manual.md."
+            )
             raise typer.Exit(code=2) from exc
 
         stages_to_run = STAGE_ORDER
@@ -231,6 +243,140 @@ def doctor(
     console.print(table)
     if n_fail:
         raise typer.Exit(code=1)
+
+
+@app.command()
+def prune(
+    older_than: str | None = typer.Option(
+        None, help="e.g. '30d', '12h'. Defaults to config's prune.older_than (30d)."
+    ),
+    keep_final: bool | None = typer.Option(
+        None,
+        help="Keep final.mp4/metadata.json, remove only intermediates. Defaults to config's prune.keep_final (true).",
+    ),
+    delete: bool = typer.Option(
+        False,
+        "--delete",
+        help="Actually delete. Without this flag, prune only lists what it would remove (dry run).",
+    ),
+    root: Path = typer.Option(OUTPUT_ROOT, help="Output root to scan."),
+    config: Path | None = typer.Option(None, "--config"),
+):
+    """List (dry run) or delete old job output directories to reclaim
+    disk space. Deletion always requires the explicit --delete flag."""
+    from echoface.prune import apply_prune, find_prune_candidates, format_size, parse_duration
+
+    cfg = load_config(config)
+    older_than_str = older_than or cfg.prune.older_than
+    keep_final_val = cfg.prune.keep_final if keep_final is None else keep_final
+    try:
+        threshold = parse_duration(older_than_str)
+    except ValueError as exc:
+        console.print(f"[bold red]Error:[/] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    candidates = find_prune_candidates(root, threshold, keep_final_val)
+    if not candidates:
+        console.print(f"Nothing to prune (older than {older_than_str} under {root}).")
+        return
+
+    table = Table(
+        title=f"{'Would prune' if not delete else 'Pruning'} (older than {older_than_str}, keep_final={keep_final_val})"
+    )
+    table.add_column("Job")
+    table.add_column("Age")
+    table.add_column("Files")
+    table.add_column("Size")
+    total_size = 0
+    for c in candidates:
+        table.add_row(
+            c.job_id,
+            f"{c.age.days}d" if c.age else "unknown",
+            str(len(c.files_to_remove)),
+            format_size(c.size_bytes),
+        )
+        total_size += c.size_bytes
+    console.print(table)
+    console.print(f"Total: {len(candidates)} job(s), {format_size(total_size)}")
+
+    if not delete:
+        console.print(
+            "\n[yellow]Dry run — nothing deleted. Re-run with --delete to actually remove these.[/]"
+        )
+        return
+
+    freed = apply_prune(candidates)
+    console.print(f"[bold green]Freed {format_size(freed)}.[/]")
+
+
+presenter_app = typer.Typer(help="Manage presenter folders (assets/portraits/<name>/).")
+app.add_typer(presenter_app, name="presenter")
+
+
+@presenter_app.command("init")
+def presenter_init(
+    name: str = typer.Argument(..., help="Presenter folder name to create under assets/portraits/."),
+    force: bool = typer.Option(False, help="Overwrite an existing meta.yaml."),
+) -> None:
+    """Scaffold a new presenter folder: assets/portraits/<name>/meta.yaml
+    plus a README reminding you what else is needed. This does NOT create
+    or weaken the consent gate - the scaffolded meta.yaml references a
+    consent document that does not exist yet on purpose; `echoface make`
+    will keep refusing to render this presenter until you add a real,
+    signed one under consent/ and point consent_ref at it."""
+    presenter_dir = Path("assets/portraits") / name
+    meta_path = presenter_dir / "meta.yaml"
+    if meta_path.exists() and not force:
+        console.print(f"[bold red]Error:[/] {meta_path} already exists (use --force to overwrite).")
+        raise typer.Exit(code=1)
+
+    presenter_dir.mkdir(parents=True, exist_ok=True)
+    today = date.today().isoformat()
+    consent_ref = f"consent/{name}_{today}.pdf"
+    meta_path.write_text(
+        f"""# Presenter scaffolded by `echoface presenter init {name}`.
+# Fill in display_name, then add a REAL signed consent document at the
+# path below (see docs/security/responsible-use-consent-policy.md and
+# consent/README.md for what it should contain) before this presenter
+# can be rendered - echoface refuses to render without it, by design.
+display_name: {name.replace("_", " ").replace("-", " ").title()}
+consent_ref: {consent_ref}
+consent_date: {today}
+voice_consent: false
+""",
+        encoding="utf-8",
+    )
+    readme_path = presenter_dir / "README.md"
+    if not readme_path.exists():
+        readme_path.write_text(
+            f"""# Presenter: {name}
+
+Still needed before `echoface make --presenter {name}` will work:
+
+1. **Consent.** Get written consent from the real person (or don't use a
+   real person's likeness at all). Put the signed document at
+   `{consent_ref}` (or update `meta.yaml`'s `consent_ref` to wherever you
+   put it). See ../../../docs/security/responsible-use-consent-policy.md.
+2. **A face.** Either:
+   - `idle.mp4`: a short (10-20s) clip of the person sitting still and
+     blinking naturally, front-facing, evenly lit, mouth closed - used by
+     `face.engine: wav2lip` (default); or
+   - `portrait.png`/`.jpg`: a single sharp, front-facing, well-lit photo
+     (>=1024px), used by `face.engine: sadtalker` or as a wav2lip fallback
+     when no idle.mp4 is present.
+3. Edit `meta.yaml`'s `display_name` to something readable.
+
+Then: `echoface doctor` should show this presenter's consent as OK, and
+`echoface make --topic "..." --presenter {name}` will work.
+""",
+            encoding="utf-8",
+        )
+
+    console.print(f"[bold green]Scaffolded:[/] {presenter_dir}/ (meta.yaml, README.md)")
+    console.print(
+        f"[yellow]Next:[/] add a real signed consent document at [bold]{consent_ref}[/] "
+        f"and an idle.mp4/portrait.png under {presenter_dir}/ - see {presenter_dir}/README.md."
+    )
 
 
 def main() -> None:
