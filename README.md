@@ -47,7 +47,9 @@ locality, and no vendor lock-in — see
   so the full pipeline shape (including the real ffmpeg compose stage) is
   CI-testable without a GPU; a separate `gpu`/`ollama`-marked test tier
   (`tests/gpu/`, `scripts/run_gpu_tests.ps1`) exercises the real engines
-  on tiny inputs when a GPU is available.
+  on tiny inputs when a GPU is available, optionally as an on-demand
+  self-hosted CI run — see
+  [`docs/ops/self-hosted-gpu-runner.md`](docs/ops/self-hosted-gpu-runner.md).
 - **Automatic OOM handling** — halves batch size, then falls back to CPU.
 
 ## Quickstart

@@ -65,6 +65,16 @@ to re-render, delete the job folder entirely — there's no built-in
 retention/pruning command at v0.1.0 (see
 `docs/project/improvements-and-known-issues.md`).
 
+## Running the real-engine GPU test suite (on demand, self-hosted CI)
+```powershell
+scripts\gpu_runner.ps1 status     # installed / registered / listening?
+scripts\gpu_runner.ps1 start      # foreground; Ctrl+C to stop when done
+# in another terminal:
+gh workflow run gpu-tests.yml
+gh run watch
+```
+Full setup and the security model: `docs/ops/self-hosted-gpu-runner.md`.
+
 ## Incident: a render silently used the wrong config
 Check `job.json`'s recorded `config_hash` per stage against
 `stage_hash(cfg, stage_name)` for your current config

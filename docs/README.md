@@ -53,6 +53,7 @@ to set it up.
 - [Runbook](ops/runbook.md)
 - [Troubleshooting](ops/troubleshooting.md)
 - [Performance / VRAM Guide](ops/performance-vram-guide.md)
+- [Self-hosted GPU Runner (on-demand CI real-engine tests)](ops/self-hosted-gpu-runner.md)
 
 ## Security and Compliance
 - [../SECURITY.md](../SECURITY.md) (vulnerability reporting)

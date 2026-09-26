@@ -27,6 +27,8 @@ jobs:
         run: ruff format --check echoface scripts tests
       - name: mypy
         run: mypy echoface scripts
+      - name: Lint workflows for unexpected self-hosted runner targeting
+        run: python scripts/check_no_self_hosted_workflows.py
 
   gitleaks:
     name: Secret scan (gitleaks)
