@@ -1,12 +1,21 @@
 name: GPU / real-engine tests
 
 # Manual-only (workflow_dispatch), and only runs on a self-hosted runner
-# with the `gpu` label — see the "Registering a self-hosted GPU runner"
-# note below. This workflow NEVER triggers on push/PR and can never block
-# normal CI (ci.yml), since no such runner exists by default: GitHub
-# simply leaves a workflow_dispatch-only, self-hosted job queued/unpicked
-# if no matching runner is registered, and it doesn't gate any other
-# workflow or branch protection rule.
+# with the `gpu` label — see docs/ops/self-hosted-gpu-runner.md for the
+# full setup guide (security model, registration, triggering, removal).
+# This workflow NEVER triggers on push/PR and can never block normal CI
+# (ci.yml) or the release workflow (release.yml) — neither of those
+# targets a self-hosted runner (see ci.yml's "no self-hosted" lint step,
+# which fails the build if that ever silently changes).
+#
+# The runner is expected to be registered with `scripts\gpu_runner.ps1`
+# on a Windows machine that already has envs\face/envs\tts provisioned
+# (scripts\setup_windows.ps1) and model weights downloaded
+# (models\MODELS.md) — the checkout this workflow runs against is an
+# ephemeral `_work` folder that does NOT contain any of that; tests find
+# it via `ECHOFACE_HOME`, which `gpu_runner.ps1 install` writes into the
+# runner's own `.env` file (loaded automatically into every job's
+# environment by the Actions runner).
 
 on:
   workflow_dispatch:
@@ -16,39 +25,73 @@ on:
         required: false
         default: "gpu or ollama"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: gpu-tests
+  cancel-in-progress: false
+
 jobs:
   gpu-tests:
     name: Real-engine tests (self-hosted GPU)
-    runs-on: [self-hosted, gpu]
+    # Belt and braces against this ever running from a fork: the repo is
+    # public, this targets a self-hosted runner attached to a specific
+    # machine, and workflow_dispatch alone already requires write access
+    # to trigger — this condition means it also refuses to run under any
+    # circumstance where the workflow file itself was sourced from a
+    # different repository (e.g. a reusable-workflow call it was never
+    # designed for).
+    if: github.repository == 'ninad-k/Echoface'
+    runs-on: [self-hosted, windows, gpu]
+    timeout-minutes: 60
     steps:
+      - name: Verify ECHOFACE_HOME is set and provisioned
+        shell: pwsh
+        run: |
+          if (-not $env:ECHOFACE_HOME) {
+            Write-Error "ECHOFACE_HOME is not set in this runner's environment. It must point at the provisioned Echoface install (envs\, models\, vendor\) -- see docs/ops/self-hosted-gpu-runner.md. If you registered this runner with scripts\gpu_runner.ps1 install, check its .env file next to run.cmd."
+            exit 1
+          }
+          if (-not (Test-Path $env:ECHOFACE_HOME)) {
+            Write-Error "ECHOFACE_HOME ($env:ECHOFACE_HOME) does not exist on this runner."
+            exit 1
+          }
+          $faceExe = Join-Path $env:ECHOFACE_HOME "envs\face\Scripts\python.exe"
+          if (-not (Test-Path $faceExe)) {
+            Write-Error "envs\face is not provisioned under ECHOFACE_HOME ($env:ECHOFACE_HOME) -- expected $faceExe. Run scripts\setup_windows.ps1 there first."
+            exit 1
+          }
+          $modelsDir = Join-Path $env:ECHOFACE_HOME "models"
+          if (-not (Test-Path $modelsDir) -or (Get-ChildItem $modelsDir -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1) -eq $null) {
+            Write-Error "models\ under ECHOFACE_HOME ($env:ECHOFACE_HOME) is missing or empty -- download weights per models\MODELS.md first."
+            exit 1
+          }
+          Write-Host "ECHOFACE_HOME=$env:ECHOFACE_HOME (provisioned: envs\face and models\ present)"
+
       - uses: actions/checkout@v7
 
-      - name: Install orchestrator package
-        run: |
-          if (-not (Test-Path ".venv\Scripts\pytest.exe")) {
-            py -3.14 -m venv .venv
-          }
-          .venv\Scripts\pip install -e ".[dev,captions]"
+      - name: Install orchestrator package into a job-local venv
         shell: pwsh
+        run: |
+          # Deliberately job-local (created fresh under this checkout,
+          # i.e. the runner's own _work folder) -- never reuses or
+          # mutates the .venv under ECHOFACE_HOME, which is a separate,
+          # persistent install the runner's owner may also use directly.
+          py -3.14 -m venv .venv
+          .venv\Scripts\pip install -e ".[dev,captions]"
 
       - name: Run GPU/Ollama-marked tests
-        run: .venv\Scripts\pytest -v -m "${{ github.event.inputs.marker_expr }}" tests\gpu --no-header
         shell: pwsh
+        env:
+          ECHOFACE_REQUIRE_GPU_TESTS: "1"
+        run: |
+          .venv\Scripts\pytest -v -m "${{ github.event.inputs.marker_expr }}" tests\gpu --no-header --junitxml=gpu-test-results.xml
 
-# --- Registering a self-hosted GPU runner (do this yourself; not done by
-#     this repo or by any automated tooling) ------------------------------
-# 1. On the Windows machine with the GPU and envs\face/envs\tts already
-#    provisioned (scripts\setup_windows.ps1) and model weights downloaded
-#    (models\MODELS.md), go to:
-#      https://github.com/ninad-k/Echoface/settings/actions/runners/new
-# 2. Follow GitHub's generated "Download" and "Configure" commands for
-#    Windows. When prompted for labels, add `gpu` (in addition to the
-#    default `self-hosted`, `Windows`, `X64` labels) — this workflow's
-#    `runs-on: [self-hosted, gpu]` only matches a runner with that label.
-# 3. Run the runner as a service (the setup script offers this) so it's
-#    available without a logged-in session, or run it interactively for
-#    on-demand use only.
-# 4. Trigger a run manually: Actions tab -> "GPU / real-engine tests" ->
-#    "Run workflow". It will never run automatically on push/PR.
-# 5. To remove the runner later, use the same settings page's "Remove"
-#    button (or `./config.cmd remove` on the runner machine).
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gpu-test-results
+          path: gpu-test-results.xml
+          retention-days: 14

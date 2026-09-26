@@ -10,11 +10,26 @@ Run locally with:
 or directly:
     .venv\\Scripts\\pytest -m "gpu or ollama" tests/gpu -v
 
+On a self-hosted CI runner, the checkout (where this test file itself
+lives) is an ephemeral `_work` folder that does *not* contain
+`envs/`/`models/`/`vendor/`/`assets/` — those are gigabytes of venvs and
+model weights provisioned once on the machine, not re-created per run.
+Set `ECHOFACE_HOME` to that provisioned install's path (see
+`docs/ops/self-hosted-gpu-runner.md`) and every path below falls back to
+resolving there instead — see `echoface.util.proc.resolve_asset`'s
+docstring for exactly how. Unset (the default, and every non-CI-runner
+use), behaviour is identical to before this variable existed: everything
+resolves relative to this checkout, same as always.
+
+Set `ECHOFACE_REQUIRE_GPU_TESTS=1` (see `conftest.py` in this directory)
+to turn every prerequisite-missing skip below into a hard failure — a
+"green" run on a machine that's supposed to be fully provisioned (i.e.
+the self-hosted runner) should never quietly skip everything and still
+report success. Off by default so a partially-provisioned dev machine
+still gets useful signal from the tests it can run.
+
 See docs/qa/test-plan.md's RT-# table for what each test corresponds to,
 and docs/ops/installation-deployment.md for provisioning these venvs.
-Every test here is self-skipping (not failing) if its prerequisite
-(venv/weights/presenter asset/Ollama) isn't present, so a partially
--provisioned machine still gets useful signal from the tests it can run.
 """
 
 from __future__ import annotations
@@ -26,19 +41,20 @@ import pytest
 
 from echoface.util.ffmpeg import ffmpeg_available, probe, run_ffmpeg
 from echoface.util.gpu import ollama_reachable
+from echoface.util.proc import resolve_asset
 
 pytestmark = pytest.mark.skipif(not ffmpeg_available(), reason="ffmpeg/ffprobe not on PATH")
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-FACE_PYTHON = REPO_ROOT / "envs" / "face" / "Scripts" / "python.exe"
-TTS_PYTHON = REPO_ROOT / "envs" / "tts" / "Scripts" / "python.exe"
-REALTEST_PORTRAIT = REPO_ROOT / "assets" / "portraits" / "realtest" / "portrait.png"
-WAV2LIP_CKPT = REPO_ROOT / "models" / "wav2lip" / "wav2lip_gan.pth"
-GFPGAN_CKPT = REPO_ROOT / "models" / "gfpgan" / "GFPGANv1.4.pth"
-CODEFORMER_CKPT = REPO_ROOT / "models" / "codeformer" / "codeformer.pth"
-PIPER_MODEL = REPO_ROOT / "models" / "piper" / "en_US-lessac-medium.onnx"
-PIPER_EXE = REPO_ROOT / "envs" / "tts" / "Scripts" / "piper.exe"
-XTTS_RUNNER = REPO_ROOT / "scripts" / "xtts_runner.py"
+CODE_ROOT = Path(__file__).resolve().parent.parent.parent
+FACE_PYTHON = resolve_asset("envs/face/Scripts/python.exe", base=CODE_ROOT)
+TTS_PYTHON = resolve_asset("envs/tts/Scripts/python.exe", base=CODE_ROOT)
+REALTEST_PORTRAIT = resolve_asset("assets/portraits/realtest/portrait.png", base=CODE_ROOT)
+WAV2LIP_CKPT = resolve_asset("models/wav2lip/wav2lip_gan.pth", base=CODE_ROOT)
+GFPGAN_CKPT = resolve_asset("models/gfpgan/GFPGANv1.4.pth", base=CODE_ROOT)
+CODEFORMER_CKPT = resolve_asset("models/codeformer/codeformer.pth", base=CODE_ROOT)
+PIPER_MODEL = resolve_asset("models/piper/en_US-lessac-medium.onnx", base=CODE_ROOT)
+PIPER_EXE = resolve_asset("envs/tts/Scripts/piper.exe", base=CODE_ROOT)
+XTTS_RUNNER = resolve_asset("scripts/xtts_runner.py", base=CODE_ROOT)  # code -- always from CODE_ROOT
 
 
 def _require(*paths: Path, reason: str) -> None:
@@ -102,7 +118,7 @@ def test_real_wav2lip_tiny_render(tiny_audio, tmp_path):
             "--cache_key",
             "gpu-test-realtest",
         ],
-        cwd=REPO_ROOT,
+        cwd=CODE_ROOT,
         capture_output=True,
         text=True,
         timeout=300,
@@ -147,7 +163,7 @@ def test_real_gfpgan_restoration_tiny(tmp_path):
             "--region",
             "face",
         ],
-        cwd=REPO_ROOT,
+        cwd=CODE_ROOT,
         capture_output=True,
         text=True,
         timeout=180,
@@ -190,7 +206,7 @@ def test_real_codeformer_restoration_tiny_mouth_region(tmp_path):
             "--region",
             "mouth",
         ],
-        cwd=REPO_ROOT,
+        cwd=CODE_ROOT,
         capture_output=True,
         text=True,
         timeout=180,
@@ -244,7 +260,7 @@ def test_real_xtts_synthesis_tiny(tmp_path):
             "--device",
             "cuda",
         ],
-        cwd=REPO_ROOT,
+        cwd=CODE_ROOT,
         capture_output=True,
         text=True,
         timeout=300,
@@ -293,6 +309,6 @@ def teardown_module(module):
     # Best-effort cleanup of any facecache.json this test session wrote
     # under a tmp_path (pytest handles tmp_path cleanup itself; this is
     # just defensive for cache files written relative to cwd, if any).
-    stray = REPO_ROOT / "facecache.json"
+    stray = CODE_ROOT / "facecache.json"
     if stray.exists():
         shutil.rmtree(stray, ignore_errors=True)

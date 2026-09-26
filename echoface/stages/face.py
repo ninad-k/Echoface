@@ -20,7 +20,7 @@ from pathlib import Path
 from echoface.stages.base import Stage
 from echoface.util import ffmpeg as ffm
 from echoface.util.gpu import detect_gpu, unload_ollama_model
-from echoface.util.proc import resolve_exe
+from echoface.util.proc import resolve_asset, resolve_exe
 
 OOM_MARKERS = (
     "cuda out of memory",
@@ -493,29 +493,19 @@ class FaceStage(Stage):
         python_exe = resolve_exe("envs/face/Scripts/python.exe")
         region = self.cfg.face.restore_region
 
-        def _abs(rel: str) -> str:
-            """Absolute path relative to the current cwd, unconditionally
-            (unlike resolve_exe, which only resolves a path that already
-            exists — model weights may not have been downloaded yet in
-            every environment, e.g. CI). Must be called before the
-            explicit cwd is handed to subprocess.run below, since these
-            argv entries would otherwise resolve against that cwd, not
-            ours."""
-            return str((Path.cwd() / rel).resolve())
-
         video_path = video_path.resolve()
         restored = restored.resolve()
 
         if method == "gfpgan":
             cmd = [
                 python_exe,
-                _abs("scripts/gfpgan_runner.py"),
+                str(resolve_asset("scripts/gfpgan_runner.py")),
                 "--input",
                 str(video_path),
                 "--outfile",
                 str(restored),
                 "--model_path",
-                _abs("models/gfpgan/GFPGANv1.4.pth"),
+                str(resolve_asset("models/gfpgan/GFPGANv1.4.pth")),
                 "--device",
                 device,
                 "--region",
@@ -524,7 +514,7 @@ class FaceStage(Stage):
         else:  # codeformer
             cmd = [
                 python_exe,
-                _abs("scripts/codeformer_runner.py"),
+                str(resolve_asset("scripts/codeformer_runner.py")),
                 "--input",
                 str(video_path),
                 "--outfile",

@@ -6,6 +6,45 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added / CI
+- **On-demand self-hosted GPU runner support**, so `gpu-tests.yml` can
+  actually prove something instead of every test self-skipping on an
+  ephemeral checkout that lacks `envs\`/`models\`/`vendor\`:
+  - `ECHOFACE_HOME` env var: `echoface/util/proc.py`'s new
+    `resolve_asset()`/`echoface_home()` resolve those directories (and
+    the GPU tests' own asset paths) against a separately-provisioned
+    install when set, falling back to the checkout otherwise -- code
+    under test still always comes from the checkout. Default (unset)
+    behaviour is unchanged; `resolve_exe()` gets the same fallback
+    transparently. Unit tests in `tests/unit/test_proc.py`.
+  - `ECHOFACE_REQUIRE_GPU_TESTS=1` (`tests/gpu/conftest.py`): turns
+    every prerequisite-missing skip in `tests/gpu/` into a hard
+    failure, so a "green" run on a machine that's supposed to be fully
+    provisioned can't quietly skip everything and still report
+    success. Set by `gpu-tests.yml`.
+  - `gpu-tests.yml` hardened: `permissions: contents: read`,
+    `if: github.repository == 'ninad-k/Echoface'`, a concurrency
+    group, `timeout-minutes`, `runs-on: [self-hosted, windows, gpu]`,
+    a first step that fails clearly if `ECHOFACE_HOME` isn't set or
+    provisioned, a job-local venv (never mutates `ECHOFACE_HOME`'s own
+    `.venv`), and the pytest JUnit XML uploaded as an artifact.
+  - `scripts/check_no_self_hosted_workflows.py`, run in `ci.yml`'s
+    `lint` job: fails the build if any workflow other than
+    `gpu-tests.yml` ever targets a self-hosted-style runner.
+  - `scripts/gpu_runner.ps1`: `install` (download the latest official
+    `actions/runner` release, SHA256-verified against GitHub's own
+    published checksum, extracted outside the repo, writes the
+    runner's `.env` with `ECHOFACE_HOME`), `register`/`remove`
+    (short-lived tokens fetched via `gh api` at the moment you run
+    them, never written to disk or logged), `start` (foreground,
+    on-demand, no Windows service), `status`. `-WhatIf` dry-run on
+    every subcommand.
+  - New `docs/ops/self-hosted-gpu-runner.md` (security model,
+    step-by-step setup, triggering, reading results, removal); linked
+    from `README.md`, `docs/README.md`, and `docs/ops/runbook.md`.
+    New threat-model entry T9
+    (`docs/security/threat-model.md`).
+
 ## [0.2.1] - 2026-09-26
 
 ### Fixed / CI
