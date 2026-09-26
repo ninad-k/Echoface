@@ -6,6 +6,19 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Bumped `actions/upload-artifact` from v4 to v7 in `ci.yml` and
+  `release.yml` (Dependabot #8) — inputs (`name`, `path`,
+  `retention-days`) are unchanged; confirmed compatible with the
+  existing `actions/download-artifact@v8` used in `release.yml`.
+- Bumped `transformers` from 4.57.1 to 4.57.6 in `requirements-tts.txt`
+  (Dependabot #9, still pinned `<5` per the existing CPML/XTTS
+  constraint). Tested for real in `envs\tts`: a live XTTS v2 synthesis
+  via `scripts/xtts_runner.py` (ffprobe-verified 24kHz mono PCM WAV,
+  7.09s) and the full `tests/gpu` suite (6/6 passed, including a new
+  `test_real_xtts_synthesis_tiny` regression test added to close the
+  gap of XTTS having no real-GPU test coverage before this).
+
 ## [0.2.0] - 2026-09-26
 
 A follow-up hardening pass working through every item in
