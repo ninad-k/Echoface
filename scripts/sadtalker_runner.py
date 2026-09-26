@@ -85,12 +85,12 @@ def main() -> int:
     os.chdir(VENDOR_ROOT)
     sys.path.insert(0, str(VENDOR_ROOT))
 
-    from src.facerender.animate import AnimateFromCoeff  # type: ignore
-    from src.generate_batch import get_data  # type: ignore
-    from src.generate_facerender_batch import get_facerender_data  # type: ignore
-    from src.test_audio2coeff import Audio2Coeff  # type: ignore
-    from src.utils.init_path import init_path  # type: ignore
-    from src.utils.preprocess import CropAndExtract  # type: ignore
+    from src.facerender.animate import AnimateFromCoeff
+    from src.generate_batch import get_data
+    from src.generate_facerender_batch import get_facerender_data
+    from src.test_audio2coeff import Audio2Coeff
+    from src.utils.init_path import init_path
+    from src.utils.preprocess import CropAndExtract
 
     device = args.device
     config_dir = str(VENDOR_ROOT / "src" / "config")

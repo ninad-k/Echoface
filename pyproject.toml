@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "echoface"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local, offline AI avatar video pipeline: script -> voice -> lip-synced face -> captioned 9:16 short."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -26,6 +26,7 @@ dependencies = [
   "pydantic>=2.5",
   "PyYAML>=6.0",
   "requests>=2.31",
+  "numpy>=1.24",  # pure-array mask/blend math only (echoface/util/restore_blend.py) - no cv2/torch here
   "python-dotenv>=1.0",
 ]
 
@@ -105,4 +106,4 @@ no_implicit_optional = true
 # Heavy-model stages import optional/lazy deps (faster_whisper, cv2, torch)
 # that aren't installed in the orchestrator's type-checking environment;
 # keep mypy scoped to what's meaningfully checkable without them.
-exclude = ["vendor/", "scripts/wav2lip_runner.py", "scripts/gfpgan_runner.py", "scripts/sadtalker_runner.py", "scripts/xtts_runner.py"]
+exclude = ["vendor/"]

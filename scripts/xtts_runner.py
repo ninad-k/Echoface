@@ -47,7 +47,7 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        from TTS.api import TTS  # type: ignore
+        from TTS.api import TTS
     except ImportError:
         print(
             "coqui-tts is not installed in this environment. "

@@ -25,6 +25,7 @@ Usage (see scripts/setup_windows.ps1 for the full download+patch+install
 sequence):
     python vendor/patches/patch_basicsr.py <path-to-extracted-basicsr-1.4.2>
 """
+
 from __future__ import annotations
 
 import sys
@@ -66,7 +67,9 @@ def patch_degradations_py(root: Path) -> None:
         if new in content:
             print("basicsr degradations.py already patched, skipping")
             return
-        raise RuntimeError("basicsr degradations.py functional_tensor import not found; repo layout may have changed")
+        raise RuntimeError(
+            "basicsr degradations.py functional_tensor import not found; repo layout may have changed"
+        )
     path.write_text(content.replace(old, new), encoding="utf-8")
     print(f"patched {path}")
 
