@@ -26,18 +26,28 @@ locality, and no vendor lock-in — see
 
 - **One command, full pipeline**: script generation (Ollama), text-to-speech
   (Piper or XTTS v2), lip-synced face animation (Wav2Lip or SadTalker, with
-  optional GFPGAN restoration), word-level captions (faster-whisper), and
-  ffmpeg-based 1080x1920 assembly with music ducking and loudness
-  normalisation.
+  optional GFPGAN or CodeFormer restoration — whole-face or mouth-only),
+  word-level captions (faster-whisper), and ffmpeg-based 1080x1920
+  assembly with music ducking and adaptive loudness normalisation.
 - **Resumable, idempotent jobs** — `resume`/`clean` skip or invalidate
   exactly the stages that need it, tracked via per-stage config hashing.
 - **Consent enforced in code, not just policy** — refuses to render a
-  presenter without an on-file consent reference.
+  presenter without an on-file consent reference; `echoface presenter
+  init <name>` scaffolds a new presenter folder with a consent checklist
+  without weakening that gate.
+- **Output retention** — `echoface prune --older-than 30d --keep-final`
+  reclaims disk space from old job runs (dry-run by default; deletion
+  needs an explicit `--delete`).
+- **Licence-aware `doctor`** — cross-checks every active model against a
+  machine-readable licence table (`models/licenses.yaml`) and warns on
+  any non-commercial model when `monetized: true`.
 - **Runs on modest hardware** — 4 GB VRAM baseline target, verified on an
   8 GB RTX 5070 Laptop GPU (Blackwell, CUDA 12.8+).
 - **CPU-safe, GPU-free testing** — every heavy stage has a `dummy` engine
   so the full pipeline shape (including the real ffmpeg compose stage) is
-  CI-testable without a GPU.
+  CI-testable without a GPU; a separate `gpu`/`ollama`-marked test tier
+  (`tests/gpu/`, `scripts/run_gpu_tests.ps1`) exercises the real engines
+  on tiny inputs when a GPU is available.
 - **Automatic OOM handling** — halves batch size, then falls back to CPU.
 
 ## Quickstart
@@ -61,6 +71,8 @@ for exact official sources), add a presenter with written consent (see
 .venv\Scripts\echoface batch --file topics.txt
 .venv\Scripts\echoface resume <job-id>
 .venv\Scripts\echoface clean <job-id> --from captions
+.venv\Scripts\echoface presenter init <name>    # scaffold a new presenter folder
+.venv\Scripts\echoface prune --older-than 30d --keep-final   # dry-run; add --delete to actually free space
 ```
 
 Full step-by-step setup: [`docs/ops/installation-deployment.md`](docs/ops/installation-deployment.md).
@@ -129,8 +141,10 @@ records, test plans, a licence matrix, threat model, runbooks, and more.
   Tick your platform's synthetic-content disclosure toggle at upload too
   — see [`docs/security/ai-disclosure-policy.md`](docs/security/ai-disclosure-policy.md).
 - **Check model licences before monetising** — the default Wav2Lip
-  checkpoint is research/non-commercial only; `echoface doctor` warns
-  when `monetized: true` conflicts with your selected models. Full matrix:
+  checkpoint and CodeFormer restoration are research/non-commercial
+  only; `echoface doctor` warns, against a machine-readable table
+  (`models/licenses.yaml`), when `monetized: true` conflicts with any
+  of your selected models. Full matrix:
   [`docs/security/license-matrix.md`](docs/security/license-matrix.md).
 
 ## Disclaimer

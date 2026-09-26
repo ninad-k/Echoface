@@ -224,6 +224,7 @@ vendor/*
 !vendor/patches/
 models/*
 !models/MODELS.md
+!models/licenses.yaml
 output/
 .idea/
 
