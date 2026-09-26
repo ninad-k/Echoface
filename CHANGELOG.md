@@ -6,6 +6,8 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-26
+
 ### Fixed / CI
 - **Replaced the flaky `FedericoCarboni/setup-ffmpeg@v3` Action** in
   `ci.yml` and `release.yml` — it failed twice with `TypeError: fetch
