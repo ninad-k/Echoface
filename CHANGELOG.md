@@ -6,36 +6,6 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-- Bumped `actions/upload-artifact` from v4 to v7 in `ci.yml` and
-  `release.yml` (Dependabot #8) — inputs (`name`, `path`,
-  `retention-days`) are unchanged; confirmed compatible with the
-  existing `actions/download-artifact@v8` used in `release.yml`.
-- Bumped `transformers` from 4.57.1 to 4.57.6 in `requirements-tts.txt`
-  (Dependabot #9, still pinned `<5` per the existing CPML/XTTS
-  constraint). Tested for real in `envs\tts`: a live XTTS v2 synthesis
-  via `scripts/xtts_runner.py` (ffprobe-verified 24kHz mono PCM WAV,
-  7.09s) and the full `tests/gpu` suite (6/6 passed, including a new
-  `test_real_xtts_synthesis_tiny` regression test added to close the
-  gap of XTTS having no real-GPU test coverage before this).
-
-### Fixed
-- **Permanently fixed the stray `gfpgan/weights/` directory that
-  appeared at the repo root after every real GFPGAN restoration**
-  (`scripts/gfpgan_runner.py`, the `tests/gpu` suite, SadTalker's
-  `--enhancer gfpgan`) — root cause was `gfpgan`'s own installed
-  package hardcoding a cwd-relative `model_rootpath='gfpgan/weights'`
-  (see DEF-13 in `docs/qa/defect-log.md` for the full trace). Added
-  `echoface/util/facexlib_pin.py`, which pins facexlib's weight
-  resolution to an absolute `models/gfpgan/` instead, wired into
-  `scripts/gfpgan_runner.py` and `scripts/sadtalker_runner.py`.
-  `echoface/stages/face.py::_apply_restore` also now builds every
-  subprocess path argument absolute and passes an explicit `cwd` (the
-  job's own output dir) as defence in depth. `.gitignore` and
-  `pyproject.toml`'s mypy `exclude` both guard against a leftover
-  instance of `/gfpgan/`, `/weights/`, or `/results/` at the repo root
-  shadowing the real package again.
-
 ## [0.2.0] - 2026-09-26
 
 A follow-up hardening pass working through every item in
@@ -61,6 +31,17 @@ deferred-with-why); this section summarises what shipped.
   `monetized: true`.
 - The consent-gate refusal error now prints a "what to do next" block
   (presenter init, smoketest demo, docs link) instead of a bare error.
+- Bumped `actions/upload-artifact` from v4 to v7 in `ci.yml` and
+  `release.yml` (Dependabot #8) — inputs (`name`, `path`,
+  `retention-days`) are unchanged; confirmed compatible with the
+  existing `actions/download-artifact@v8` used in `release.yml`.
+- Bumped `transformers` from 4.57.1 to 4.57.6 in `requirements-tts.txt`
+  (Dependabot #9, still pinned `<5` per the existing CPML/XTTS
+  constraint). Tested for real in `envs\tts`: a live XTTS v2 synthesis
+  via `scripts/xtts_runner.py` (ffprobe-verified 24kHz mono PCM WAV,
+  7.09s) and the full `tests/gpu` suite (6/6 passed, including a new
+  `test_real_xtts_synthesis_tiny` regression test added to close the
+  gap of XTTS having no real-GPU test coverage before this).
 
 ### Added
 - **CodeFormer face restoration** (`face.restore: codeformer`) — real
@@ -104,6 +85,21 @@ deferred-with-why); this section summarises what shipped.
   v0.2.0 pass" section for detail (a PowerShell string-encoding bug in
   the new GPU test runner, a test-fixture mismatch in the new batch
   test, and the stray `gfpgan/` directory above).
+- **Permanently fixed the stray `gfpgan/weights/` directory that
+  appeared at the repo root after every real GFPGAN restoration**
+  (`scripts/gfpgan_runner.py`, the `tests/gpu` suite, SadTalker's
+  `--enhancer gfpgan`) — root cause was `gfpgan`'s own installed
+  package hardcoding a cwd-relative `model_rootpath='gfpgan/weights'`
+  (see DEF-13 in `docs/qa/defect-log.md` for the full trace). Added
+  `echoface/util/facexlib_pin.py`, which pins facexlib's weight
+  resolution to an absolute `models/gfpgan/` instead, wired into
+  `scripts/gfpgan_runner.py` and `scripts/sadtalker_runner.py`.
+  `echoface/stages/face.py::_apply_restore` also now builds every
+  subprocess path argument absolute and passes an explicit `cwd` (the
+  job's own output dir) as defence in depth. `.gitignore` and
+  `pyproject.toml`'s mypy `exclude` both guard against a leftover
+  instance of `/gfpgan/`, `/weights/`, or `/results/` at the repo root
+  shadowing the real package again.
 
 ## [0.1.0] - 2026-09-26
 
