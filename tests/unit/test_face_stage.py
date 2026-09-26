@@ -202,7 +202,8 @@ def test_resolve_face_source_raises_when_nothing_found(tmp_path):
 def test_apply_restore_codeformer_builds_correct_command(tmp_path, monkeypatch):
     """FaceStage._apply_restore must invoke scripts/codeformer_runner.py
     (not gfpgan_runner.py) when method='codeformer', with --region passed
-    through from face.restore_region."""
+    through from face.restore_region, using an absolute script path (see
+    test_apply_restore_uses_absolute_paths_and_explicit_cwd for why)."""
     from echoface.job import Job
     from echoface.stages.face import FaceStage
 
@@ -210,6 +211,7 @@ def test_apply_restore_codeformer_builds_correct_command(tmp_path, monkeypatch):
 
     def fake_run(cmd, **kwargs):
         captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
         # Simulate the runner having written the output file.
         out_idx = cmd.index("--outfile") + 1
         Path(cmd[out_idx]).write_bytes(b"fake restored video")
@@ -229,7 +231,8 @@ def test_apply_restore_codeformer_builds_correct_command(tmp_path, monkeypatch):
     stage._apply_restore(video_path, "codeformer")
 
     cmd = captured["cmd"]
-    assert "scripts/codeformer_runner.py" in cmd
+    script_arg = next(a for a in cmd if "codeformer_runner.py" in a)
+    assert Path(script_arg).is_absolute()
     assert "gfpgan_runner.py" not in " ".join(cmd)
     assert "--region" in cmd
     assert cmd[cmd.index("--region") + 1] == "mouth"
@@ -244,6 +247,7 @@ def test_apply_restore_gfpgan_builds_correct_command(tmp_path, monkeypatch):
 
     def fake_run(cmd, **kwargs):
         captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
         out_idx = cmd.index("--outfile") + 1
         Path(cmd[out_idx]).write_bytes(b"fake restored video")
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
@@ -260,5 +264,51 @@ def test_apply_restore_gfpgan_builds_correct_command(tmp_path, monkeypatch):
     stage._apply_restore(video_path, "gfpgan")
 
     cmd = captured["cmd"]
-    assert "scripts/gfpgan_runner.py" in cmd
+    script_arg = next(a for a in cmd if "gfpgan_runner.py" in a)
+    assert Path(script_arg).is_absolute()
     assert cmd[cmd.index("--region") + 1] == "face"
+
+
+def test_apply_restore_uses_absolute_paths_and_explicit_cwd(tmp_path, monkeypatch):
+    """Regression test for DEF-13 (stray gfpgan/ dir at the repo root):
+    _apply_restore must build every path argument (runner script,
+    --model_path) as absolute -- never a bare cwd-relative string like
+    'gfpgan/weights' or 'scripts/gfpgan_runner.py' -- and must pass an
+    explicit cwd (the job's own output dir) to subprocess.run, so that
+    any third-party code that still resolves *something* relative to
+    cwd can only ever pollute a directory we already own, never the
+    repo root."""
+    from echoface.job import Job
+    from echoface.stages.face import FaceStage
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
+        out_idx = cmd.index("--outfile") + 1
+        Path(cmd[out_idx]).write_bytes(b"fake restored video")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("echoface.stages.face.subprocess.run", fake_run)
+
+    job = Job.create(topic="restore test 3", root=tmp_path, job_id="restore-test-3")
+    from echoface.config import EchofaceConfig
+
+    full_cfg = EchofaceConfig(face=FaceConfig(restore="gfpgan", restore_region="face", device="cpu"))
+    stage = FaceStage(job, full_cfg)
+    video_path = job.path_for("face.mp4")
+    video_path.write_bytes(b"original video")
+    stage._apply_restore(video_path, "gfpgan")
+
+    cmd = captured["cmd"]
+    for flag in ("--model_path",):
+        value = cmd[cmd.index(flag) + 1]
+        assert Path(value).is_absolute(), f"{flag} must be absolute, got {value!r}"
+    script_arg = next(a for a in cmd if "gfpgan_runner.py" in a)
+    assert Path(script_arg).is_absolute()
+    assert script_arg != "scripts/gfpgan_runner.py"
+
+    # Explicit cwd, pinned to the job's own output dir (not the repo
+    # root and not None/inherited).
+    assert captured["kwargs"].get("cwd") == str(video_path.resolve().parent)

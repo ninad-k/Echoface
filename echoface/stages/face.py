@@ -493,16 +493,29 @@ class FaceStage(Stage):
         python_exe = resolve_exe("envs/face/Scripts/python.exe")
         region = self.cfg.face.restore_region
 
+        def _abs(rel: str) -> str:
+            """Absolute path relative to the current cwd, unconditionally
+            (unlike resolve_exe, which only resolves a path that already
+            exists — model weights may not have been downloaded yet in
+            every environment, e.g. CI). Must be called before the
+            explicit cwd is handed to subprocess.run below, since these
+            argv entries would otherwise resolve against that cwd, not
+            ours."""
+            return str((Path.cwd() / rel).resolve())
+
+        video_path = video_path.resolve()
+        restored = restored.resolve()
+
         if method == "gfpgan":
             cmd = [
                 python_exe,
-                "scripts/gfpgan_runner.py",
+                _abs("scripts/gfpgan_runner.py"),
                 "--input",
                 str(video_path),
                 "--outfile",
                 str(restored),
                 "--model_path",
-                "models/gfpgan/GFPGANv1.4.pth",
+                _abs("models/gfpgan/GFPGANv1.4.pth"),
                 "--device",
                 device,
                 "--region",
@@ -511,7 +524,7 @@ class FaceStage(Stage):
         else:  # codeformer
             cmd = [
                 python_exe,
-                "scripts/codeformer_runner.py",
+                _abs("scripts/codeformer_runner.py"),
                 "--input",
                 str(video_path),
                 "--outfile",
@@ -524,7 +537,14 @@ class FaceStage(Stage):
 
         if self.logger:
             self.logger.info(f"[face] running {method} restoration (region={region})...")
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # Explicit cwd (the job's own output dir, not the repo root) is
+        # defence in depth against any third-party code (gfpgan/facexlib,
+        # SadTalker's enhancer path) that still resolves *some* path
+        # relative to cwd despite the fixes above — see
+        # echoface/util/facexlib_pin.py and docs/qa/defect-log.md's
+        # DEF-13. Any such stray directory then lands in a per-job
+        # folder we already own and clean up, never the repo root.
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(video_path.parent))
         if result.returncode != 0:
             raise FaceEngineError(
                 f"{method} restoration failed: {(result.stdout or '') + (result.stderr or '')}"

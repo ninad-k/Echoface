@@ -217,6 +217,17 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# Third-party auto-download artefacts that can land at the repo root
+# if a subprocess's cwd is ever the repo root and a package's own
+# cwd-relative default isn't overridden in time (see
+# echoface/util/facexlib_pin.py and docs/qa/defect-log.md's DEF-13 for
+# the gfpgan/facexlib case this was written for) — root-level only
+# (leading slash), so this never hides a legitimately nested dir of the
+# same name (e.g. vendor/CodeFormer/weights/).
+/gfpgan/
+/weights/
+/results/
+
 # Echoface project-specific
 .venv/
 envs/

@@ -106,4 +106,12 @@ no_implicit_optional = true
 # Heavy-model stages import optional/lazy deps (faster_whisper, cv2, torch)
 # that aren't installed in the orchestrator's type-checking environment;
 # keep mypy scoped to what's meaningfully checkable without them.
-exclude = ["vendor/"]
+#
+# The root-level gfpgan/, weights/, results/ entries guard against a
+# recurring third-party auto-download artefact (see
+# echoface/util/facexlib_pin.py and docs/qa/defect-log.md's DEF-13):
+# an untracked namespace-package `gfpgan/` at the repo root has
+# shadowed the real installed `gfpgan` package for mypy's module
+# resolution before. Excluding it here means even a leftover instance
+# can't do that again.
+exclude = ["vendor/", "^gfpgan/", "^weights/", "^results/"]
