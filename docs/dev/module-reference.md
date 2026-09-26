@@ -11,8 +11,9 @@ gate, then runs each `Stage` in `STAGE_ORDER`, prints the timing table.
 ## `echoface/config.py`
 - `EchofaceConfig` (root pydantic model) with nested `ScriptConfig`,
   `VoiceConfig`, `FaceConfig`, `CaptionsConfig`, `ComposeConfig`.
-- `load_config(path, overrides) -> EchofaceConfig`: yaml → CLI overrides →
-  env var overrides → validation, in that precedence.
+- `load_config(path, overrides) -> EchofaceConfig`: yaml → env var
+  overrides → CLI overrides → validation. CLI flag beats env var beats
+  yaml beats pydantic default (see ADR-0008).
 - `stage_hash(cfg, stage_name, extra) -> str`: the idempotency hash (see
   ADR-0005).
 

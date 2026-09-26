@@ -47,6 +47,7 @@ class FaceConfig(BaseModel):
     engine: str = "wav2lip"  # wav2lip | sadtalker | dummy
     source: str = "idle"  # idle | photo
     restore: str = "none"  # none | gfpgan | codeformer
+    restore_region: str = "face"  # face | mouth — see echoface.util.restore_blend
     batch_size: int = 32
     face_det_batch_size: int = 4
     device: str = "auto"  # auto | cuda | cpu
@@ -59,6 +60,20 @@ class FaceConfig(BaseModel):
     def _check_engine(cls, v: str) -> str:
         if v not in ("wav2lip", "sadtalker", "dummy"):
             raise ValueError(f"face.engine must be 'wav2lip', 'sadtalker' or 'dummy', got {v!r}")
+        return v
+
+    @field_validator("restore")
+    @classmethod
+    def _check_restore(cls, v: str) -> str:
+        if v not in ("none", "gfpgan", "codeformer"):
+            raise ValueError(f"face.restore must be 'none', 'gfpgan' or 'codeformer', got {v!r}")
+        return v
+
+    @field_validator("restore_region")
+    @classmethod
+    def _check_restore_region(cls, v: str) -> str:
+        if v not in ("face", "mouth"):
+            raise ValueError(f"face.restore_region must be 'face' or 'mouth', got {v!r}")
         return v
 
     @field_validator("device")
@@ -106,6 +121,12 @@ class ComposeConfig(BaseModel):
     # README's "Real end-to-end verification" section for the evidence.
     true_peak_dbtp: float = -2.5
     loudness_lra: float = 11.0  # loudnorm LRA (loudness range) target
+    pre_limiter_dbfs: float = -9.0  # premix alimiter ceiling before loudnorm (see ADR-0004/0009)
+    loudness_tolerance_lu: float = 0.5  # acceptable |measured - target| on the FINAL encoded file
+    loudness_hard_tp_ceiling_dbtp: float = (
+        -1.0
+    )  # spec's actual final-file requirement (stricter than true_peak_dbtp's pre-encode margin)
+    loudness_max_encode_attempts: int = 2  # 1 initial + up to (n-1) corrective re-encodes
     crf: int = 19
     disclosure_line: str = "Presenter is AI-generated."
 
@@ -115,6 +136,11 @@ class ComposeConfig(BaseModel):
         if v not in ("face_top", "full_face", "face_bottom"):
             raise ValueError(f"compose.layout must be one of face_top/full_face/face_bottom, got {v!r}")
         return v
+
+
+class PruneConfig(BaseModel):
+    older_than: str = "30d"  # parsed by echoface.prune.parse_duration
+    keep_final: bool = True  # keep final.mp4/metadata.json, remove intermediates only
 
 
 class EchofaceConfig(BaseModel):
@@ -128,6 +154,7 @@ class EchofaceConfig(BaseModel):
     face: FaceConfig = Field(default_factory=FaceConfig)
     captions: CaptionsConfig = Field(default_factory=CaptionsConfig)
     compose: ComposeConfig = Field(default_factory=ComposeConfig)
+    prune: PruneConfig = Field(default_factory=PruneConfig)
 
     def stage_config(self, stage_name: str) -> dict:
         mapping = {
@@ -145,7 +172,10 @@ DEFAULT_CONFIG_PATH = Path("config/echoface.yaml")
 
 
 # Environment-variable overrides for machine-specific / secret-shaped
-# values, applied last (env > CLI overrides > yaml > pydantic defaults).
+# values, applied after yaml but before CLI overrides (CLI flag > env var
+# > yaml > pydantic defaults — an explicit `--flag` on the command line is
+# the most specific, most deliberate signal, so it wins over a .env value
+# that might be a stale/forgotten machine default; see ADR-0008).
 # See .env.example for documentation of each. Keeping this list short and
 # explicit (rather than a generic "any dotted config key as env var"
 # mechanism) makes every override visible in one place.
@@ -173,18 +203,18 @@ def _apply_env_overrides(data: dict) -> dict:
 
 
 def load_config(path: Path | None = None, overrides: dict | None = None) -> EchofaceConfig:
-    """Load YAML config, apply CLI overrides (dotted-flat dict of top-level
-    keys), apply environment-variable overrides, and validate with
-    pydantic. Precedence: env vars > CLI overrides > config/*.yaml >
-    pydantic field defaults."""
+    """Load YAML config, apply environment-variable overrides, apply CLI
+    overrides (dotted-flat dict of top-level keys) last, and validate with
+    pydantic. Precedence: CLI flag > env var (.env) > config/*.yaml >
+    pydantic field defaults — see ADR-0008."""
     path = path or DEFAULT_CONFIG_PATH
     data: dict = {}
     if path and Path(path).exists():
         with open(path, encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
+    data = _apply_env_overrides(data)
     if overrides:
         data = _deep_merge(data, overrides)
-    data = _apply_env_overrides(data)
     return EchofaceConfig.model_validate(data)
 
 

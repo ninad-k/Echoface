@@ -30,6 +30,8 @@ to set it up.
   · [0005](architecture/adr/0005-idempotent-stage-hashing.md)
   · [0006](architecture/adr/0006-consent-gate.md)
   · [0007](architecture/adr/0007-dummy-engines.md)
+  · [0008](architecture/adr/0008-config-precedence-cli-over-env.md)
+  · [0009](architecture/adr/0009-loudness-robustness.md)
 
 ## QA
 - [Test Strategy](qa/test-strategy.md)
